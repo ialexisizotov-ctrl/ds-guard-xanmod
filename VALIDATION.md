@@ -23,17 +23,28 @@ both services became active. The 7.2 VM also passed the intentional health-check
 failure, scoped rollback, traffic after rollback and a repeated installation.
 An initial 7.0 probe made while the services were still starting did not pass;
 these results do not claim filtering is ready before service startup completes.
-The latest Ubuntu 6.8 module is undergoing its own runtime validation.
+Ubuntu 6.8.0-147 also passed runtime filtering, intentional health-check
+failure and scoped rollback, repeated installation, and cold-boot persistence.
+One allowed-DNS probe timed out during a wider resolver interruption; that
+failed result is retained. A separate retry and the latest package test passed.
 
 The first production canary on the custom XanMod 7.0 kernel passed five actual
 VPN payload checks before and five after installation, all three filtering
 layers, strict public-site TLS, exact protected firewall tables and rule order,
 routes, policy rules, configuration hashes and container identities. Its previous
 kernels remain installed. No kernel faults were found in the bounded window.
+A second XanMod 7.0 machine and an Ubuntu 22.04 / 6.8.0-87 machine also passed
+actual VPN, three filtering layers and strict public TLS. The latter uses a
+module built with its exact Ubuntu 22.04 headers/compiler and retains its kernel.
+On the second XanMod machine, preservation is qualified: an existing private
+service reconciler removed two obsolete draining rules; six kernel-generated
+IPv6 link-local routes appeared. A Docker null/empty-DNS serialization change
+required a narrow reconciler compatibility fix. Its unrelated private-service
+topology warning remains outside filtering acceptance.
 The remaining servers are being handled sequentially. This is still a
 development snapshot, not a completed fleet or release acceptance.
 
-Offline checks: 10 compatibility/preservation/listener tests, 768 actual
+Offline checks: 11 compatibility/preservation/listener tests, 768 actual
 hostname-formatter cases under ASan/UBSan, and 16,640 legacy bounded-copy cases
 under ASan/UBSan. Exact pinned-source patch application, repeat application and
 refusal of unexpected source changes were also checked.

@@ -11,7 +11,7 @@ def run(args):
 
 def assess(kernel, config, os_id, arch, container, lockdown, free, available):
     errors = []
-    if os_id not in ('ubuntu', 'debian'): errors.append('Unsupported OS: Ubuntu/Debian required')
+    if os_id != 'ubuntu': errors.append('This release has been validated on Ubuntu only')
     if arch != 'x86_64': errors.append('This release supports amd64 only')
     if container: errors.append('An independent host kernel is required; containers/WSL are unsupported')
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._+~-]{0,127}', kernel): errors.append('Invalid kernel release')
@@ -36,6 +36,9 @@ def collect():
     errors = assess(kernel, cfg.read_text() if cfg.exists() else '', os_data.get('ID', '').strip('"'),
                     platform.machine(), virt, lock.read_text() if lock.exists() else '',
                     shutil.disk_usage('/var').free, mem['MemAvailable'])
+    version=os_data.get('VERSION_ID','').strip('"')
+    expected_version='22.04' if kernel=='6.8.0-87-generic' else '24.04'
+    if version!=expected_version: errors.append('This kernel/OS version pair has not passed runtime acceptance')
     if os.geteuid(): errors.append('Run as root')
     for tool in ('systemctl', 'systemd-run', 'python3', 'iptables', 'ip', 'curl', 'tar', 'flock', 'modinfo', 'modprobe', 'apt-get', 'dpkg'):
         if not shutil.which(tool): errors.append('Missing prerequisite: ' + tool)
