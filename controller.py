@@ -20,6 +20,9 @@ def runtime_check(txn,before):
     if run(['sysctl','-n','net.netfilter.nf_conntrack_acct'])!='1':raise RuntimeError('Conntrack accounting unavailable')
     queues=Path('/proc/net/netfilter/nfnetlink_queue').read_text().splitlines()
     if not {0,1} <= {int(l.split()[0]) for l in queues}:raise RuntimeError('NFQUEUE listeners missing')
+    livepatch=Path('/sys/kernel/livepatch/xt_ndpi')
+    if not livepatch.is_dir() or (livepatch/'enabled').read_text().strip()!='1' or (livepatch/'transition').read_text().strip()!='0':
+        raise RuntimeError('nDPI livepatch has not completed its safe transition')
     dm=run(['dmesg']);base=before['kernel_log'].splitlines();old=set(base)
     bad=[l for l in dm.splitlines() if l not in old and re.search(r'UBSAN:|BUG:|Oops:|Kernel panic|WARNING: CPU|Out of memory|Killed process',l)]
     if bad:raise RuntimeError('New kernel diagnostic; see transaction evidence')
@@ -55,16 +58,23 @@ def execute(health_command=None):
         safety='ds-guard-safe-rollback-'+txn.name
         run(['systemd-run','--unit='+safety,'--on-active=35m','/usr/bin/python3',str(txn/'transaction.py'),'rollback',str(txn)])
         print('Transaction: '+str(txn),flush=True)
+        settled=False
         try:
             driver('prepare',txn)
             module=run(['modinfo','-n','xt_ndpi']);sha=digest(module)
             old=txn/'files'/before['module_before'].lstrip('/') if before['module_before'] else None
+            if before['loaded']:driver('plugin-check',txn)
             if before['loaded'] and (not old or not old.is_file() or digest(old)!=sha):
                 # No unloading of a livepatch module; a planned reboot is required.
                 save(STATE/'pending.json',{'kernel':result['kernel'],'module':module,'sha256':sha,'staged_boot_id':before['boot_id'],'transaction':str(txn)})
                 (txn/'committed').write_text('Module staged; running module retained. Reboot required before activation.\n')
                 print('REBOOT_REQUIRED: module prepared; current traffic and loaded module retained. Run installer after planned reboot.',flush=True)
+                settled=True
                 return 20
+            driver('load',txn)
+            if before['acct'] not in ('0','1'):
+                before['acct']=run(['sysctl','-n','net.netfilter.nf_conntrack_acct'])
+                save(txn/'before.json',before)
             driver('apply',txn)
             time.sleep(3)
             evidence=runtime_check(txn,before)
@@ -77,12 +87,15 @@ def execute(health_command=None):
             (txn/'committed').write_text('Local acceptance passed\n')
             (STATE/'pending.json').unlink(missing_ok=True)
             print('SUCCESS: 3/3 local layers verified. Transaction '+str(txn),flush=True)
+            settled=True
             return 0
         except BaseException:
             rollback(txn)
+            settled=True
             raise
         finally:
-            run(['systemctl','stop',safety+'.timer'],False)
+            # Leave the independent recovery timer armed if rollback itself fails.
+            if settled:run(['systemctl','stop',safety+'.timer'],False)
 
 if __name__=='__main__':
     ap=argparse.ArgumentParser();ap.add_argument('--check',action='store_true');ap.add_argument('--health-command');args=ap.parse_args()

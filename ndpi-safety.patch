@@ -1,0 +1,155 @@
+--- a/src/include/ndpi_typedefs.h
++++ b/src/include/ndpi_typedefs.h
+@@ -762,7 +762,7 @@
+   int			  ipv6;
+ //  spinlock_t              lock;
+   atomic_t                count;
+-  struct hash_ip4p        tbl[0];
++  struct hash_ip4p        tbl[];
+ };
+ 
+ struct bt_announce {              // 192 bytes
+--- a/ndpi-netfilter/src/Makefile
++++ b/ndpi-netfilter/src/Makefile
+@@ -6,7 +6,7 @@
+ #ccflags-y += -DUSE_GLOBAL_CONTEXT
+ ccflags-y += -g -Wno-declaration-after-statement
+ # Needed for pahole
+-ccflags-y += -femit-struct-debug-detailed=any
++ccflags-y += $(call cc-option,-femit-struct-debug-detailed=any)
+ 
+ ifndef $(KERNEL_DIR)
+ KERNEL_DIR := /lib/modules/$(shell uname -r)/build
+--- a/ndpi-netfilter/src/main.c
++++ b/ndpi-netfilter/src/main.c
+@@ -1305,8 +1305,8 @@
+     /* sizeof host_server_name = 80 */
+     char buf[160];
+ 
+-    size_t hlen = ndpi_min(strlen(name),sizeof(buf)/2-1);
+-    int i, j, need_q = 0;
++    size_t hlen = ndpi_min(strlen(name),(sizeof(buf)-3)/2);
++    int i, j = 0, need_q = 0;
+ 
+     buf[0]= '\0';
+     for(i=0; i < hlen; i++) {
+@@ -3461,6 +3461,8 @@
+ #include "livepatch/v5.18.1.c"
+ #elif LINUX_VERSION_CODE < KERNEL_VERSION(6,0,0)
+ #include "livepatch/v5.18.13.c"
++#elif LINUX_VERSION_CODE >= KERNEL_VERSION(7,2,0)
++#include "livepatch/v7.2.c"
+ #else
+ #include "livepatch/v6.0.c"
+ #endif
+--- a/ndpi-netfilter/src/ndpi_proc_parsers.h
++++ b/ndpi-netfilter/src/ndpi_proc_parsers.h
+@@ -11,7 +11,7 @@
+ 
+ struct ndpi_port_def {
+ 	int		  count[2]; // counter udp and tcp ranges
+-	ndpi_port_range_t p[0];     // udp and tcp ranges
++	ndpi_port_range_t p[];     // udp and tcp ranges
+ };
+ 
+ uint16_t ndpi_check_ipport(ndpi_patricia_node_t *node,uint16_t port,int l4);
+--- a/ndpi-netfilter/src/ndpi_main_netfilter.h
++++ b/ndpi-netfilter/src/ndpi_main_netfilter.h
+@@ -40,7 +40,7 @@
+ 
+ struct write_proc_cmd {
+ 	uint32_t  cpos,max;
+-	char      cmd[0];
++	char      cmd[];
+ };
+ 
+ struct nf_ct_ext_ndpi;
+--- a/ndpi-netfilter/src/ndpi_proc_parsers.c
++++ b/ndpi-netfilter/src/ndpi_proc_parsers.c
+@@ -766,7 +766,7 @@
+ 		u_int32_t mark,mask;
+ 
+ 		int id=-1;
+-		int i,any,all,ok;
++		int i,any,all,ok = 0;
+ 
+ 		any = !strcmp(hid,"any");
+ 		all = !strcmp(hid,"all");
+--- a/src/lib/ndpi_memory.c
++++ b/src/lib/ndpi_memory.c
+@@ -76,7 +76,7 @@
+ 
+ /* ****************************************** */
+ 
+-u_int32_t ndpi_get_tot_allocated_memory() {
++u_int32_t ndpi_get_tot_allocated_memory(void) {
+ #ifndef __KERNEL__
+   return(__sync_fetch_and_add(&ndpi_tot_allocated_memory, 0));
+ #else
+--- a/src/lib/protocols/tls.c
++++ b/src/lib/protocols/tls.c
+@@ -1442,7 +1442,7 @@
+ #else
+         {
+         u_int64_t tdiff_ms_i = tdiff_ms, tdiff_ms_d;
+-        do_div(tdiff_ms,1000);
++        tdiff_ms_d = do_div(tdiff_ms_i,1000);
+         snprintf(buf, sizeof(buf), "Slow TLS Request: %d.%d sec", (int)tdiff_ms_i, (int)tdiff_ms_d/100 );
+         }
+ #endif
+--- a/src/lib/ndpi_main.c
++++ b/src/lib/ndpi_main.c
+@@ -9620,7 +9620,7 @@
+ #else
+ 	{
+ 	u_int64_t tdiff_ms_i = tdiff_ms, tdiff_ms_d;
+-	do_div(tdiff_ms,1000);
++	tdiff_ms_d = do_div(tdiff_ms_i,1000);
+ 	snprintf(buf, sizeof(buf), "Slow TCP 3WH (SYN_ACK): %d.%d sec", (int)tdiff_ms_i, (int)tdiff_ms_d/100 );
+ 	}
+ #endif
+@@ -9642,7 +9642,7 @@
+ #else
+ 	{
+ 	u_int64_t tdiff_ms_i = tdiff_ms, tdiff_ms_d;
+-	do_div(tdiff_ms,1000);
++	tdiff_ms_d = do_div(tdiff_ms_i,1000);
+ 	snprintf(buf, sizeof(buf), "Slow TCP 3WH (SYN_ACK): %d.%d sec", (int)tdiff_ms_i, (int)tdiff_ms_d/100 );
+ 	}
+ #endif
+@@ -11335,7 +11335,7 @@
+ #else
+ 	{
+ 	u_int64_t tdiff_ms_i = elapsed_ms, tdiff_ms_d;
+-	do_div(elapsed_ms,1000);
++	tdiff_ms_d = do_div(tdiff_ms_i,1000);
+ 	snprintf(msg, sizeof(msg), "Slow HTTP Req. (Slowloris): %d.%d sec", (int)tdiff_ms_i, (int)tdiff_ms_d/100 );
+ 	}
+ #endif
+@@ -12805,7 +12805,7 @@
+ 
+ /* ****************************************************** */
+ 
+-char *ndpi_revision() {
++char *ndpi_revision(void) {
+   return(NDPI_GIT_RELEASE);
+ }
+ 
+@@ -12846,7 +12846,7 @@
+ #endif
+ #endif
+ 
+-u_int16_t ndpi_get_api_version() {
++u_int16_t ndpi_get_api_version(void) {
+   return(NDPI_API_VERSION);
+ }
+ 
+@@ -12858,7 +12858,7 @@
+   return(ndpi_str ? ndpi_str->proto_defaults : NULL);
+ }
+ 
+-u_int ndpi_get_ndpi_detection_module_size() {
++u_int ndpi_get_ndpi_detection_module_size(void) {
+   return(sizeof(struct ndpi_detection_module_struct));
+ }
+ 

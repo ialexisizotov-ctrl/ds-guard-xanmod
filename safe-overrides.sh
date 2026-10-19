@@ -6,10 +6,28 @@ NDPI_HELPER_VARS="$NDPI_HELPER_VARS DS_SAFE_ROOT"
 NDPI_HELPER_FUNCS="$NDPI_HELPER_FUNCS safe_patch_source"
 safe_patch_source(){ python3 "$DS_SAFE_ROOT/patch_sources.py" "$1"; }
 ndpi_artifact_install(){ return 1; } # Original vendor binaries lack the reviewed fixes.
+ndpi_plugin_fits(){
+  local xt t rc=1 chain="DSG_PROBE_${BASHPID}"
+  xt="$(ndpi_plugin_path)" && [ -f "$1" ] && t="$(mktemp -d)" || return 1
+  if cp "$1" "$t/libxt_ndpi.so" && iptables -w 5 -N "$chain"; then
+    XTABLES_LIBDIR="$t:${xt%/*}" iptables -w 5 -A "$chain" -m ndpi --proto bittorrent -j RETURN >>"$LOG" 2>&1 && rc=0
+    iptables -w 5 -F "$chain" && iptables -w 5 -X "$chain" || rc=1
+  fi
+  rm -f "$t/libxt_ndpi.so"; rmdir "$t"
+  return "$rc"
+}
 ensure_repos(){ :; } # Never rewrite the server's repository configuration.
 install_header_meta(){ :; } # Never pull a new kernel indirectly.
 apt_install(){
-  apt-get $APT_NET_OPTS -o DPkg::Lock::Timeout=120 -y --no-remove --no-upgrade install "$@" >>"$LOG" 2>&1
+  if [ "${DS_APT_UPDATED:-0}" != 1 ]; then
+    timeout 300 apt-get $APT_NET_OPTS -o DPkg::Lock::Timeout=120 update >>"$LOG" 2>&1 || return 1
+    DS_APT_UPDATED=1
+  fi
+  timeout 600 apt-get $APT_NET_OPTS -o DPkg::Lock::Timeout=120 -y --no-remove --no-upgrade install "$@" >>"$LOG" 2>&1
+}
+suricata_install(){
+  apt_install suricata || return 1
+  python3 "$DS_SAFE_ROOT/transaction.py" capture-package-default "$DS_TXN"
 }
 ndpi_dkms_tree(){
   local src="/usr/src/ndpi-$NDPI_DKMS_VERSION"

@@ -9,6 +9,30 @@
   },
   "ndpi-netfilter/src/main.c": {
     "original": "a402513dcf6120e565817575fc49d79c50fb55309ff5e92f620533fc2538ac07",
-    "patched": "1e95173d38fde685dc502d1155a56a76fcb4ad880e42cf2cc87197e1a463893f"
+    "patched": "003d4e26ab9aafdc380f9fe2674ad8cdc652e073bf2dd139587850d3bdb9972c"
+  },
+  "ndpi-netfilter/src/ndpi_proc_parsers.h": {
+    "original": "d6955e82bb48a768cc69b4babe7978657eae8f5019c1e4f1c7fefc00847429fc",
+    "patched": "6b3115f9fd1101cca852687f7ec9781995df50db78364555c397383518826c11"
+  },
+  "ndpi-netfilter/src/ndpi_main_netfilter.h": {
+    "original": "e7cf4eb61ff7f57f36b169f1c7c33e12b94967110d214c5055dbeb6af289604a",
+    "patched": "3e94060482085748cdb98fd787d7199c797ff596baa671cccc803907eefc31ff"
+  },
+  "ndpi-netfilter/src/ndpi_proc_parsers.c": {
+    "original": "477ff90559e55dcd5262a00880f2ff2c6067dbab54eef02b110585061e7800c6",
+    "patched": "b161b4401fc00e39ed3c6ed557d45d6c947b11bb816d4a66d012a31795e842c6"
+  },
+  "src/lib/ndpi_memory.c": {
+    "original": "cd4eb477327fc7a787caebc2c9c5239e8de993e7ef5b782cad4079a5cf5d39e3",
+    "patched": "7e16476edce25ce1f60476050ac0311aec427b92a661c5f8619cac63cdf4a67c"
+  },
+  "src/lib/protocols/tls.c": {
+    "original": "bff82e32268dcaaed96bebb38f5510268f4343ecf573d37ef7c05ac205b412ec",
+    "patched": "6c5a8722be8e7a6b33274ae863ececde79b74461f9a4d638cf732b19a7b49f7c"
+  },
+  "src/lib/ndpi_main.c": {
+    "original": "b98a514ba047eb9a282b37d34e5d973277fd7d9c0479b1c1c60a3692d305d3c3",
+    "patched": "d9213b134fe4a134cf6b370d66f5050fa8a34574f37fc046e32c7c985b870d91"
   }
 }

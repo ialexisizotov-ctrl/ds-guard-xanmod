@@ -41,8 +41,8 @@ def collect():
         if not shutil.which(tool): errors.append('Missing prerequisite: ' + tool)
     guard2 = [Path('/etc/systemd/system/ssh.service.d/zz-ds-guard.conf'), Path('/etc/systemd/system/suricata.service.d/zz-ds-guard-nfqueue.conf')]
     if any(p.exists() for p in guard2): errors.append('Existing ds-guard 2.x must not be overwritten')
-    if run(['systemctl','is-active','suricata'])[1]=='active' and not Path('/etc/suricata/rules/ds-p2p.rules').exists():
-        errors.append('An unrelated active Suricata deployment must not be overwritten')
+    if Path('/etc/suricata/suricata.yaml').exists() and not Path('/etc/suricata/rules/ds-p2p.rules').exists():
+        errors.append('A pre-existing Suricata configuration without ds-guard ownership must not be overwritten')
     related=run(['systemctl','show','ds-guard.service','-p','RequiredBy','-p','BoundBy'])[1]
     for line in related.splitlines():
         for unit in line.partition('=')[2].split():

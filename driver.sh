@@ -10,9 +10,15 @@ case "$1" in
   prepare)
     build_ndpi || exit 1
     ;;
-  apply)
+  load)
     modprobe xt_ndpi || exit 1
     iptables -w 5 -m ndpi --help >/dev/null || exit 1
+    ;;
+  plugin-check)
+    plugin=$(ndpi_plugin_path) || exit 1
+    ndpi_plugin_fits "$plugin" || exit 1
+    ;;
+  apply)
     STRING_OK=0; iptables -w 5 -m string -h >/dev/null 2>&1 && STRING_OK=1
     NFQ_OK=0; modprobe nfnetlink_queue && NFQ_OK=1
     setup_suricata || exit 1

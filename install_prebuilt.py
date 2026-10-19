@@ -16,13 +16,18 @@ for name in ['xt_ndpi.ko','libxt_ndpi.so']:
 vermagic=subprocess.check_output(['modinfo','-F','vermagic',str(bundle/'xt_ndpi.ko')],text=True).strip()
 if vermagic.split()[0]!=kernel or vermagic!=m['vermagic']:raise SystemExit('Module ABI mismatch')
 found=list(Path('/lib/modules',kernel).rglob('xt_ndpi.ko*'))
-dest=Path('/lib/modules',kernel,'updates/dkms');dest.mkdir(parents=True,exist_ok=True)
+dest=Path('/lib/modules',kernel,'updates/dkms')
 if any(p.parent!=dest for p in found):raise SystemExit('An unowned module path requires review')
-for p in found:p.unlink()
-shutil.copyfile(bundle/'xt_ndpi.ko',dest/'xt_ndpi.ko');(dest/'xt_ndpi.ko').chmod(0o644)
 xtdir=Path('/usr/lib/x86_64-linux-gnu/xtables')
 if not xtdir.is_dir():raise SystemExit('Unknown xtables plugin directory')
-shutil.copyfile(bundle/'libxt_ndpi.so',xtdir/'libxt_ndpi.so');(xtdir/'libxt_ndpi.so').chmod(0o644)
+dest.mkdir(parents=True,exist_ok=True)
+def atomic_copy(src,dst):
+ temp=dst.with_name(dst.name+'.dsg-next')
+ shutil.copyfile(src,temp);temp.chmod(0o644);temp.replace(dst)
+atomic_copy(bundle/'xt_ndpi.ko',dest/'xt_ndpi.ko')
+for p in found:
+ if p!=dest/'xt_ndpi.ko':p.unlink()
+atomic_copy(bundle/'libxt_ndpi.so',xtdir/'libxt_ndpi.so')
 subprocess.run(['depmod','-a',kernel],check=True,timeout=90)
 resolved=Path(subprocess.check_output(['modinfo','-n','xt_ndpi'],text=True).strip())
 if resolved!=dest/'xt_ndpi.ko' or hashlib.sha256(resolved.read_bytes()).hexdigest()!=m['sha256']['xt_ndpi.ko']:

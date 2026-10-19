@@ -1,0 +1,80 @@
+{
+  "src/include/ndpi_typedefs.h": [
+    [
+      "struct hash_ip4p        tbl[0];",
+      "struct hash_ip4p        tbl[];"
+    ]
+  ],
+  "ndpi-netfilter/src/Makefile": [
+    [
+      "ccflags-y += -femit-struct-debug-detailed=any",
+      "ccflags-y += $(call cc-option,-femit-struct-debug-detailed=any)"
+    ]
+  ],
+  "ndpi-netfilter/src/main.c": [
+    [
+      "#else\n#include \"livepatch/v6.0.c\"",
+      "#elif LINUX_VERSION_CODE >= KERNEL_VERSION(7,2,0)\n#include \"livepatch/v7.2.c\"\n#else\n#include \"livepatch/v6.0.c\""
+    ],
+    [
+      "int i, j, need_q = 0;",
+      "int i, j = 0, need_q = 0;"
+    ],
+    [
+      "ndpi_min(strlen(name),sizeof(buf)/2-1)",
+      "ndpi_min(strlen(name),(sizeof(buf)-3)/2)"
+    ]
+  ],
+  "ndpi-netfilter/src/ndpi_proc_parsers.h": [
+    [
+      "ndpi_port_range_t p[0];",
+      "ndpi_port_range_t p[];"
+    ]
+  ],
+  "ndpi-netfilter/src/ndpi_main_netfilter.h": [
+    [
+      "char      cmd[0];",
+      "char      cmd[];"
+    ]
+  ],
+  "ndpi-netfilter/src/ndpi_proc_parsers.c": [
+    [
+      "int i,any,all,ok;",
+      "int i,any,all,ok = 0;"
+    ]
+  ],
+  "src/lib/ndpi_memory.c": [
+    [
+      "u_int32_t ndpi_get_tot_allocated_memory() {",
+      "u_int32_t ndpi_get_tot_allocated_memory(void) {"
+    ]
+  ],
+  "src/lib/protocols/tls.c": [
+    [
+      "do_div(tdiff_ms,1000);",
+      "tdiff_ms_d = do_div(tdiff_ms_i,1000);"
+    ]
+  ],
+  "src/lib/ndpi_main.c": [
+    [
+      "char *ndpi_revision() {",
+      "char *ndpi_revision(void) {"
+    ],
+    [
+      "u_int16_t ndpi_get_api_version() {",
+      "u_int16_t ndpi_get_api_version(void) {"
+    ],
+    [
+      "u_int ndpi_get_ndpi_detection_module_size() {",
+      "u_int ndpi_get_ndpi_detection_module_size(void) {"
+    ],
+    [
+      "do_div(tdiff_ms,1000);",
+      "tdiff_ms_d = do_div(tdiff_ms_i,1000);"
+    ],
+    [
+      "do_div(elapsed_ms,1000);",
+      "tdiff_ms_d = do_div(tdiff_ms_i,1000);"
+    ]
+  ]
+}

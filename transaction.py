@@ -56,7 +56,7 @@ def begin(txn):
     ipt=run(['iptables-save'])
     data={'kernel':kernel,'boot_id':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
       'files':manifest,'units':states,'iptables':ipt,'routes':run(['ip','-j','route','show','table','all']),
-      'rules':run(['ip','-j','rule']), 'acct':run(['sysctl','-n','net.netfilter.nf_conntrack_acct']),
+      'rules':run(['ip','-j','rule']), 'acct':run(['sysctl','-n','net.netfilter.nf_conntrack_acct'],False),
       'failed_units':run(['systemctl','--failed','--no-legend','--plain']),
       'tcp_listeners':run(['ss','-Hlnpt']),
       'kernel_log':run(['dmesg']), 'loaded':Path('/sys/module/xt_ndpi').exists(),
@@ -68,6 +68,16 @@ def valid_txn(arg):
     p=Path(arg).resolve()
     if p.parent != BASE or not re.fullmatch(r'[0-9a-f-]+',p.name): raise ValueError('Invalid transaction path')
     return p
+
+def capture_package_default(txn):
+    # A package newly installed by this transaction remains installed on rollback.
+    # Keep its pristine default configuration rather than deleting that file.
+    name='/etc/suricata/suricata.yaml';p=Path(name)
+    b=json.loads((txn/'before.json').read_text())
+    if name not in b['files'] and p.is_file() and not p.is_symlink():
+        dest=txn/'files'/p.relative_to('/');dest.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copy2(p,dest);b['files'][name]={'symlink':False,'new_package_default':True}
+        save(txn/'before.json',b)
 
 def rollback(txn):
     if (txn/'committed').exists() or (txn/'rolled-back').exists(): return
@@ -104,11 +114,13 @@ def rollback(txn):
     run(['systemctl','daemon-reload'],False)
     for unit,state in b['units'].items():
         if state['enabled']=='enabled':run(['systemctl','enable',unit],False)
-        elif state['enabled']=='disabled':run(['systemctl','disable',unit],False)
+        elif state['enabled'] not in ('static','indirect','generated','alias'):run(['systemctl','disable',unit],False)
         if state['active']=='active':run(['systemctl','restart',unit],False,timeout=90)
         else:run(['systemctl','stop',unit],False)
     save(txn/'rolled-back',{'time':time.time(),'module_not_forcibly_unloaded':True,'global_firewall_not_restored':True})
 
 if __name__=='__main__':
-    if len(sys.argv)!=3 or sys.argv[1]!='rollback':sys.exit(64)
-    rollback(valid_txn(sys.argv[2]))
+    if len(sys.argv)!=3 or sys.argv[1] not in ('rollback','capture-package-default'):sys.exit(64)
+    txn=valid_txn(sys.argv[2])
+    if sys.argv[1]=='rollback':rollback(txn)
+    else:capture_package_default(txn)
