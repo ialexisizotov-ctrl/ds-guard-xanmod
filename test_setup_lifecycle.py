@@ -1,6 +1,9 @@
-import unittest,importlib.util,tempfile,json,os
+import unittest,importlib.util,tempfile,json,os,io,subprocess
+from argparse import Namespace
+from contextlib import redirect_stdout,redirect_stderr,ExitStack
 from unittest.mock import patch
 import lifecycle
+import setup_ru
 from pathlib import Path
 from setup_ru import choose_kernel,cpu_flags,V2,V3,Refusal
 from network_tuning import desired_values
@@ -82,5 +85,76 @@ class TuningCapacity(unittest.TestCase):
     if k=='net.ipv4.tcp_fastopen':self.assertEqual(int(d[k]),1027)
     elif k.endswith(('tcp_rmem','tcp_wmem')):self.assertEqual(d[k],current[k])
     else:self.assertEqual(d[k],current[k])
+
+class SetupSealResult(unittest.TestCase):
+ def setUp(self):
+  self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+  self.state=Path(self.temp.name)/'lifecycle';self.state.mkdir()
+  self.baseline={'values':{},'manual':['original'],'files':{},'file_owners':{},'packages':{'original':'1'},'ownership_schema':1,'owned_packages':{}}
+  self.pending={'operation_id':'11111111-1111-4111-8111-111111111111','metadata_before':{'values':{}},'packages_before':{'original':'1'}}
+  for name,data in [('before.json',self.baseline),('after.json',self.baseline),('pending.json',self.pending)]:
+   (self.state/name).write_text(json.dumps(data))
+  self.initial={p.name:p.read_bytes() for p in self.state.iterdir()}
+  self.stack=ExitStack();self.addCleanup(self.stack.close)
+  self.stack.enter_context(patch.object(lifecycle,'STATE',self.state))
+  self.subprocess=self.stack.enter_context(patch.object(lifecycle.subprocess,'run',side_effect=lambda args,**kw:subprocess.CompletedProcess(args,0,'inactive\n','')))
+  self.step=self.stack.enter_context(patch.object(setup_ru,'run_step',return_value=0))
+  self.args=Namespace(mode='guard',tuning='keep',health_command='true')
+  self.out=io.StringIO();self.err=io.StringIO()
+
+ def execute(self):
+  with redirect_stdout(self.out),redirect_stderr(self.err):
+   return setup_ru.perform_and_seal(self.args,{'kernel':'fixture'},{},'fixture',Path(self.temp.name)/'log')
+
+ def test_observed_apt_seal_failure_preserves_pending_and_has_no_ready(self):
+  failure='E: Problem renaming the file /var/cache/apt/pkgcache.bin.GLHj5Z to /var/cache/apt/pkgcache.bin - rename (2: No such file or directory)'
+  def subprocess_result(args,**kwargs):
+   if args[0]=='apt-mark':return subprocess.CompletedProcess(args,100,'',failure)
+   return subprocess.CompletedProcess(args,0,'inactive\n','')
+  self.subprocess.side_effect=subprocess_result
+  with patch.object(lifecycle,'snapshot',side_effect=lambda:lifecycle.run(['apt-mark','showmanual'])):
+   with self.assertRaisesRegex(RuntimeError,'Problem renaming'):self.execute()
+  self.assertIn('[ШАГ ПРОВЕРЕН]',self.out.getvalue())
+  self.assertNotIn('[ГОТОВО]',self.out.getvalue()+self.err.getvalue())
+  self.assertIn('[ЖУРНАЛ НЕ ЗАВЕРШЁН]',self.err.getvalue())
+  self.assertEqual({p.name:p.read_bytes() for p in self.state.iterdir()},self.initial)
+
+ def test_ready_is_printed_once_only_after_actual_seal_removes_pending(self):
+  def snapshot():
+   self.assertNotIn('[ГОТОВО]',self.out.getvalue())
+   self.assertTrue((self.state/'pending.json').exists())
+   return dict(self.baseline)
+  with patch.object(lifecycle,'snapshot',side_effect=snapshot):self.assertEqual(self.execute(),0)
+  self.assertFalse((self.state/'pending.json').exists())
+  self.assertEqual(json.loads((self.state/'last-operation.json').read_text())['exit_code'],0)
+  self.assertEqual(self.out.getvalue().count('[ГОТОВО]'),1)
+  self.assertLess(self.out.getvalue().index('[ШАГ ПРОВЕРЕН]'),self.out.getvalue().index('[ГОТОВО]'))
+  self.assertEqual(self.err.getvalue(),'')
+
+ def test_nonzero_worker_codes_remain_nonzero_after_successful_seal(self):
+  for rc in (20,1,75,78):
+   with self.subTest(rc=rc):
+    (self.state/'pending.json').write_text(json.dumps(self.pending))
+    self.out.seek(0);self.out.truncate(0);self.step.return_value=rc
+    with patch.object(lifecycle,'snapshot',return_value=dict(self.baseline)):
+     self.assertEqual(self.execute(),rc)
+    self.assertFalse((self.state/'pending.json').exists())
+    self.assertEqual(json.loads((self.state/'last-operation.json').read_text())['exit_code'],rc)
+    self.assertNotIn('[ГОТОВО]',self.out.getvalue()+self.err.getvalue())
+
+ def test_worker_exception_is_not_reported_as_ready(self):
+  self.step.side_effect=RuntimeError('worker failure')
+  with patch.object(lifecycle,'snapshot',return_value=dict(self.baseline)):
+   with self.assertRaisesRegex(RuntimeError,'worker failure'):self.execute()
+  self.assertFalse((self.state/'pending.json').exists())
+  self.assertEqual(json.loads((self.state/'last-operation.json').read_text())['exit_code'],1)
+  self.assertNotIn('[ГОТОВО]',self.out.getvalue()+self.err.getvalue())
+
+ def test_standalone_perform_only_reports_the_step(self):
+  with redirect_stdout(self.out):
+   self.assertEqual(setup_ru.perform(self.args,{'kernel':'fixture'},{},'fixture',Path(self.temp.name)/'log'),0)
+  self.assertIn('[ШАГ ПРОВЕРЕН]',self.out.getvalue())
+  self.assertNotIn('[ГОТОВО]',self.out.getvalue())
+  self.assertEqual((self.state/'pending.json').read_bytes(),self.initial['pending.json'])
 
 if __name__=='__main__':unittest.main()

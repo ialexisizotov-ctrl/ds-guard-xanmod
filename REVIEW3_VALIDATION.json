@@ -1,0 +1,1379 @@
+{
+  "schema": 1,
+  "release": "v1.7.11-dsg2-rc3",
+  "prepared_at_utc": "2026-10-19T19:55:48.471996+00:00",
+  "document_status": "LAB_COMPLETE_PRERELEASE_CANDIDATE",
+  "scope": "bounded isolated local and QEMU laboratory validation",
+  "production_verified": false,
+  "stable_bootstrap_enabled": false,
+  "previous_release_withdrawn": "v1.7.11-dsg1",
+  "freeze": {
+    "name": "freeze-v6",
+    "source_manifest_sha256": "8d00efbd26640a78d3e822ea3bb4e3e679be3de588ab49d2bae1416309563803",
+    "source_manifest_entries": 74,
+    "code_sha256": {
+      "activation_guard.py": "2f64298667847919c10cbfdd29bda05cecfbe3810f37840ad1e0696d35fbec40",
+      "bootstrap.sh": "7fbfc8e6ad709f306734ad5ed522ea7b999971600f6933258d30bf2c67445392",
+      "controller.py": "9d7d7751dd558cab86dd560bc74b9337418a5d71046035939fe60a272fa147e2",
+      "dkms-build.sh": "0fed63c2ea3f8507991919019c380cf777cf304b16e9781089792fbdcd83b73e",
+      "domain_rotation.py": "f762e4252b51941e03a8e965a6aafe53a93c0aa84fa937b101fd8e058a886b42",
+      "driver.sh": "28f32389a4f67e9322583cef38a5ee488059ca47e1e8d2b99153b49c1b0c3d1b",
+      "install.sh": "409b4a99024b50397a42faa7c574427d30d89b86488e479015e39f0bd69ca324",
+      "install_prebuilt.py": "e870f8159150900c6c9061295ad09de7a9694fcb7d8bf1d236579962c8d20816",
+      "kernel-stage.py": "68c2ba65accd621128473fa9d8c0d53c952f8db5e2137870405fad707357036d",
+      "kernel-stage.sh": "a45572b50d114a15413b163464f83372788602f34ced38befcd15a46bcbd2ba7",
+      "legacy_context.py": "8847c97b1f312b9690f261d756d232afd15ba6e2a490a45815e407a9ed8f8b28",
+      "legacy_upgrade.py": "88b00c76eeeb84c023220d13498d409a5e9bdc28b57b304650ba790e11639a5c",
+      "lifecycle.py": "a9a0e3e9b17cb24197c18a22a3455f6a2cde9fc816edd6a0fda5d0d7b11a04d7",
+      "module_identity.py": "257ff6c36514dbfffe46e7e42064c442d90a8a48b653679e1d2ebf8e474c0213",
+      "network_tuning.py": "e6e90874bc98733d1ff626c5d93fc2abf2c2bc3ee5b6736371e6c5950dfa675d",
+      "package_install_gate.py": "e87857aa6e092e9f9c93bb8d58c0df53e2c5152f1dacaf3c8889aa1cce840d29",
+      "package_transactions.py": "9bda12f00abc67c38eb397b16e00c0c9d16bdb9c4d64b8599533171a65aadf50",
+      "patch_sources.py": "fc867eb21d6f72812449ff024ee0f3262329980d28ebeba1e23aff8deee5682c",
+      "preflight.py": "8f2c544801a7896db9ddeae5f0b99d9460ca129a842fd7f7de2120934c7b3d6b",
+      "recover.py": "c28526a6cf55370647113e546a8f7c5f724cfda75d0d0326f3d4fc8a2a36aa84",
+      "reproduce-kernel.sh": "c7ece5c506dac0d7e540c007cac7b39547382618f4ef6e11d00ebc7f5582d8f8",
+      "rollback_upgrade.py": "b464ecb4c54a516040f69c196081863aca793abc39f5890338dc37838798df9c",
+      "run_worker.py": "b940f26b0f68e10859950893576087b470b1d72ea540491ce29dbd7e59278ee3",
+      "safe-overrides.sh": "dd01b3e6963abded43a2a49add9811cd9e90cbc75f90f7f13f9d74127c7d9d01",
+      "setup.sh": "e61eb3c10cfe9c982b3245f2f91448ae582541db4a061a62819346b6f4acf0ec",
+      "setup_ru.py": "bea7742344594da6338a5799b271c37e15d4f57fca0b8b5fa89baa66ef0a5fac",
+      "test_activation_guard.py": "f54e26e0507dfaa9812a3d9ba21f7ba2ce48b6b52d3457dc23db0b0071acb218",
+      "test_allocator.py": "ae5d1a7eb85f6512e40157a0e30ae18988dd4d4c4da822bc75e66c577e24f9d4",
+      "test_apt_readonly.py": "653a2d053862e8ad7abdcb03773f0a08069a30da8440f650c4918f89538026e0",
+      "test_compat72_copy.py": "ad76ddf184c85bb8f9d2242e3c73a7114f56d746954c8d4d8d91125e2cd95f54",
+      "test_domain_rotation.py": "00ad0565c4272bff07c383c3849123c69d6317fce579310133916ef8484f4582",
+      "test_hostname_bounds.py": "14f5b81b2067fc30425c84df320fcfc517c8f8cfa9b856f36a78d754cc5340d0",
+      "test_legacy_context.py": "d8711ca4ea3c16ab5e2f16216589bcdba98dc09a6458417e51366a982b76148c",
+      "test_legacy_lifecycle.py": "5d575e272e7da8f1b3b6d9b9c4c6e6a9b47133c1b65a709f9c851fc23d75f809",
+      "test_legacy_upgrade.py": "b6d08b905e773cd5d9add6fbd4869a4c88ee910d8619a1aa5aa70e248291a846",
+      "test_lifecycle_ownership.py": "cc410abc86254aad09b1bbdb9b61987019ee7da9152d15206ccf2262e73c151c",
+      "test_listeners.py": "35f047308b3176732631402808822e09274af9c37645d4edad257d096c595adb",
+      "test_network_recovery.py": "c39a9df325931d3b7917c37b534b0ffd505f598a7d4c0db48b84563af6cedf06",
+      "test_package_install_gate.py": "74d3eb23a101072f285c44f2f444e6c7fce340bd909e99713e8f2ed3cd91d86e",
+      "test_package_transactions.py": "38414d1efd8863aed92f2b8538243c03a6fae3de7847e47dfc6f5a5501910d04",
+      "test_preflight.py": "fbcdfe4fface485e3a8c89b823e0ed5a9bd58615771755fe5abebf5d026b768f",
+      "test_rollback_upgrade.py": "7424a5297e7ac537740687dc121959cb131496fef3ea669605f14501aa3aa6cb",
+      "test_setup_lifecycle.py": "263df17980d7fa2c70f9a7207d4ae4c04f8d40dc2affe2a9c54d45eb967501cc",
+      "test_transaction.py": "3b93542934fd38696cd63d2a6eb25f7d2b61f4f0a7331aabdb82ac00c672623f",
+      "transaction.py": "5923f7815b080c736db83d1bc56dc57d2bf6c3fb12d3e58b065219c6fa9ea428",
+      "vendor-library.sh": "425cfd66677683892ebb439810e2763259d78cb76770c85c758fa1fc1cae8d57"
+    },
+    "changed_code_from_v4": [
+      "controller.py",
+      "domain_rotation.py",
+      "lifecycle.py",
+      "rollback_upgrade.py",
+      "setup_ru.py",
+      "test_apt_readonly.py",
+      "test_domain_rotation.py",
+      "test_legacy_context.py",
+      "test_rollback_upgrade.py",
+      "test_setup_lifecycle.py"
+    ],
+    "changed_code_from_v5": [
+      "controller.py",
+      "domain_rotation.py",
+      "lifecycle.py",
+      "rollback_upgrade.py",
+      "test_domain_rotation.py",
+      "test_legacy_context.py",
+      "test_rollback_upgrade.py"
+    ],
+    "hash_scope": "Code snapshot under test; not the final archive after documentation changes."
+  },
+  "local_tests": {
+    "status": "PASS",
+    "freeze": "freeze-v6",
+    "passed": 200,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "python_files_compiled": 37,
+    "shell_files_syntax_checked": 9,
+    "test_log_sha256": "a362689329b8c9978b21dbea00e1a9d83f9bb6c6f1814da9cdee7047ba6efad0",
+    "receipt": "review3-v6-local-validation.json"
+  },
+  "bootstrap_tests": {
+    "status": "PASS",
+    "passed": 5,
+    "total": 5,
+    "real_network": false,
+    "real_setup_executed": false,
+    "source_sha256": "7fbfc8e6ad709f306734ad5ed522ea7b999971600f6933258d30bf2c67445392",
+    "cases": [
+      {
+        "name": "success",
+        "passed": true,
+        "exit_code": 0,
+        "setup_called": true
+      },
+      {
+        "name": "bad_hash",
+        "passed": true,
+        "exit_code": 78,
+        "setup_called": false
+      },
+      {
+        "name": "curl_failure",
+        "passed": true,
+        "exit_code": 1,
+        "setup_called": false
+      },
+      {
+        "name": "archive_traversal",
+        "passed": true,
+        "exit_code": 1,
+        "setup_called": false
+      },
+      {
+        "name": "archive_symlink",
+        "passed": true,
+        "exit_code": 1,
+        "setup_called": false
+      }
+    ],
+    "source_unchanged_in_freeze_v5": true,
+    "source_unchanged_in_freeze_v6": true
+  },
+  "vm": {
+    "fixture": "Isolated QEMU TCG Ubuntu 22.04 / 6.8.0-87-generic synthetic held legacy state: corrected rc2 module with only ELF build-id altered; not the unsafe historical vendor binary or a production clone",
+    "cold_boot_fence": {
+      "status": "PASS",
+      "old_hold90_absent": true,
+      "uncommitted_fence_retained": true,
+      "permits_start": false,
+      "no_ndpi_rules": true,
+      "foreign_firewall_preserved": true,
+      "receipt": "review3-legacy-vm/legacy22-v4-fence-cold-blocked.json",
+      "freeze": "freeze-v4"
+    },
+    "fence_fixture_recovery": {
+      "status": "PASS",
+      "product_rollback_used": true,
+      "old_hold90_restored": true,
+      "library_units_baseline_journals_exact": true,
+      "receipt": "review3-legacy-vm/legacy22-v4-fence-restored.json",
+      "freeze": "freeze-v4"
+    },
+    "intentional_application_failure": {
+      "status": "PASS_EXPECTED_FAILURE_AND_VERIFIED_ROLLBACK",
+      "expected_command_exit_code": 1,
+      "actual_command_exit_code": 1,
+      "failure_reached": true,
+      "hold90_restored": true,
+      "no_ndpi_rules": true,
+      "foreign_sentinel_preserved": true,
+      "receipt": "review3-legacy-vm/legacy22-v4-intentional-failure-accepted.json",
+      "freeze": "freeze-v4"
+    },
+    "successful_retry": {
+      "status": "PASS",
+      "duration_seconds": 294,
+      "local_layers": 3,
+      "strict_https": true,
+      "foreign_policy_preserved": true,
+      "immutable_baseline_preserved": true,
+      "receipt": "review3-legacy-vm/legacy22-v4-activation-retry-accepted.json",
+      "duration_scope": "Elapsed operation time, not a separate continuous observation window",
+      "freeze": "freeze-v4"
+    },
+    "full_repeat": {
+      "status": "PASS",
+      "freeze": "freeze-v6",
+      "command_exit_code": 0,
+      "expected_exit_code": 0,
+      "duration_seconds": 255.10475134849548,
+      "duration_scope": "Elapsed operation on QEMU TCG; not a production duration estimate or continuous observation window",
+      "local_layers": 3,
+      "nfqueue_listeners": [
+        0,
+        1
+      ],
+      "strict_https": true,
+      "operator_application_check": true,
+      "foreign_firewall_preserved": true,
+      "new_kernel_errors": 0,
+      "immutable_baseline_preserved": true,
+      "immutable_before_sha256": "b24408d81eb905576cf0a08ba767593482bda8fd2d92db73931672777a12edd0",
+      "payload_passed": true,
+      "receipt": "review3-legacy-vm/legacy22-v6-full-repeat-accepted.json",
+      "command_receipt": "review3-legacy-vm/legacy22-v6-full-repeat-command.json",
+      "actual_command_id": "v6_full",
+      "previous_v5_failed_attempt_retained": "vm.failed_v5_bank_rotation_repeat_attempt"
+    },
+    "rollback_upgrade_after_acceptance": {
+      "status": "PASS",
+      "outcome": "EXPECTED_REBOOT_REQUIRED",
+      "freeze": "freeze-v6",
+      "actual_command_id": "v6_rollback_after_tune",
+      "shared_actual_command": true,
+      "shared_assertion_cases": [
+        "rollback_upgrade_after_acceptance",
+        "separate_network_tuning_rollback"
+      ],
+      "command_exit_code": 20,
+      "expected_exit_code": 20,
+      "duration_seconds": 1443.4192688465118,
+      "duration_display": "24 minutes 3 seconds on QEMU TCG",
+      "duration_scope": "One shared actual operation for two assertions; not two elapsed command durations and not a production estimate",
+      "pre_upgrade_files_restored": true,
+      "legacy_hold90_restored": true,
+      "loaded_module_retained": true,
+      "loaded_module_requires_separate_reboot": true,
+      "changed_network_values_restored": {
+        "net.core.default_qdisc": "fq_codel",
+        "net.ipv4.tcp_congestion_control": "cubic",
+        "net.core.rmem_max": "212992",
+        "net.core.wmem_max": "212992",
+        "net.ipv4.tcp_rmem": "4096 131072 6291456",
+        "net.ipv4.tcp_wmem": "4096 16384 4194304",
+        "net.core.netdev_max_backlog": "1000",
+        "net.core.somaxconn": "4096",
+        "net.ipv4.tcp_max_syn_backlog": "256",
+        "net.ipv4.tcp_fastopen": "1",
+        "net.ipv4.tcp_mtu_probing": "0",
+        "net.ipv4.tcp_slow_start_after_idle": "1",
+        "net.ipv4.tcp_fin_timeout": "60",
+        "net.ipv4.tcp_tw_reuse": "2",
+        "net.netfilter.nf_conntrack_max": "65536"
+      },
+      "changed_network_values_restored_count": 15,
+      "no_ndpi_rules": true,
+      "foreign_firewall_preserved": true,
+      "extra_restore_paths": [
+        "/etc/ds-guard/domain-generation.env"
+      ],
+      "original_vendor_installation_removed": false,
+      "immutable_before_sha256": "b24408d81eb905576cf0a08ba767593482bda8fd2d92db73931672777a12edd0",
+      "sealed_after_sha256": "a46c98096751e540374f220b8654d18c077b11fb9a026d34013a7788e5ba1494",
+      "records_sha256": "1a12dd801eb06160e5d885bbca9ff5d130f7283ebedf4744405485b51c035c57",
+      "firewall_steps_completed": 227,
+      "firewall_steps_total": 227,
+      "receipt": "review3-legacy-vm/legacy22-v6-rollback-upgrade-accepted.json",
+      "command_receipt": "review3-legacy-vm/legacy22-v6-rollback-upgrade-command.json"
+    },
+    "repeat_rollback_upgrade": {
+      "status": "PASS",
+      "freeze": "freeze-v6",
+      "actual_command_id": "v6_repeat_rollback",
+      "command_exit_code": 20,
+      "expected_exit_code": 20,
+      "duration_seconds": 78.82390213012695,
+      "duration_scope": "Elapsed operation on QEMU TCG; not a production duration estimate or continuous observation window",
+      "receipt": "review3-legacy-vm/legacy22-v6-rollback-repeat-accepted.json",
+      "command_receipt": "review3-legacy-vm/legacy22-v6-rollback-repeat-command.json",
+      "outcome": "EXPECTED_REBOOT_REQUIRED",
+      "loaded_module_retained": true,
+      "loaded_module_requires_separate_reboot": true,
+      "pre_upgrade_files_restored": true,
+      "no_ndpi_rules": true,
+      "foreign_firewall_preserved": true,
+      "original_vendor_installation_removed": false,
+      "firewall_steps_completed": 227,
+      "firewall_steps_total": 227,
+      "immutable_before_sha256": "b24408d81eb905576cf0a08ba767593482bda8fd2d92db73931672777a12edd0",
+      "sealed_after_sha256": "a46c98096751e540374f220b8654d18c077b11fb9a026d34013a7788e5ba1494"
+    },
+    "new_cycle_after_rollback": {
+      "status": "PASS",
+      "freeze": "freeze-v6",
+      "actual_command_id": "v6_new_cycle",
+      "command_exit_code": 0,
+      "expected_exit_code": 0,
+      "duration_seconds": 426.0743327140808,
+      "duration_scope": "Elapsed operation on QEMU TCG; not a production duration estimate or continuous observation window",
+      "receipt": "review3-legacy-vm/legacy22-v6-new-cycle-accepted.json",
+      "command_receipt": "review3-legacy-vm/legacy22-v6-new-cycle-command.json",
+      "archived_before_exact": true,
+      "archived_after_exact": true,
+      "new_baseline_kind": "legacy-upgrade",
+      "owned_packages_reset": true,
+      "new_before_sha256": "45631ed725175baa689e7fa4c9c9deba6364c360d3301d184ec0adf888c358bd",
+      "payload_passed": true,
+      "local_layers": 3,
+      "nfqueue_listeners": [
+        0,
+        1
+      ],
+      "new_kernel_errors": 0,
+      "foreign_firewall_preserved": true,
+      "strict_https": true,
+      "operator_application_check": true
+    },
+    "separate_network_tuning": {
+      "status": "PASS",
+      "freeze": "freeze-v6",
+      "actual_command_id": "v6_tune",
+      "command_exit_code": 0,
+      "expected_exit_code": 0,
+      "duration_seconds": 88.67115259170532,
+      "duration_scope": "Elapsed operation on QEMU TCG; not a production duration estimate",
+      "separate_mode_tune_after_full_keep": true,
+      "desired_sysctl_count": 15,
+      "desired_values": {
+        "net.core.default_qdisc": "fq",
+        "net.ipv4.tcp_congestion_control": "bbr",
+        "net.ipv4.tcp_slow_start_after_idle": "0",
+        "net.ipv4.tcp_fin_timeout": "15",
+        "net.ipv4.tcp_tw_reuse": "1",
+        "net.core.rmem_max": "16777216",
+        "net.core.wmem_max": "16777216",
+        "net.core.netdev_max_backlog": "16384",
+        "net.core.somaxconn": "16384",
+        "net.ipv4.tcp_max_syn_backlog": "8192",
+        "net.netfilter.nf_conntrack_max": "524288",
+        "net.ipv4.tcp_mtu_probing": "1",
+        "net.ipv4.tcp_fastopen": "3",
+        "net.ipv4.tcp_rmem": "4096 131072 16777216",
+        "net.ipv4.tcp_wmem": "4096 131072 16777216"
+      },
+      "actual_values": {
+        "net.core.default_qdisc": "fq",
+        "net.ipv4.tcp_congestion_control": "bbr",
+        "net.core.rmem_max": "16777216",
+        "net.core.wmem_max": "16777216",
+        "net.ipv4.tcp_rmem": "4096 131072 16777216",
+        "net.ipv4.tcp_wmem": "4096 131072 16777216",
+        "net.core.netdev_max_backlog": "16384",
+        "net.core.somaxconn": "16384",
+        "net.ipv4.tcp_max_syn_backlog": "8192",
+        "net.ipv4.tcp_fastopen": "3",
+        "net.ipv4.tcp_mtu_probing": "1",
+        "net.ipv4.tcp_slow_start_after_idle": "0",
+        "net.ipv4.tcp_fin_timeout": "15",
+        "net.ipv4.tcp_tw_reuse": "1",
+        "net.netfilter.nf_conntrack_max": "524288"
+      },
+      "all_desired_values_exact": true,
+      "network_unchanged": true,
+      "payload_local_layers": 3,
+      "payload_passed": true,
+      "immutable_before_sha256": "b24408d81eb905576cf0a08ba767593482bda8fd2d92db73931672777a12edd0",
+      "receipt": "review3-legacy-vm/legacy22-v6-tune-accepted.json",
+      "command_receipt": "review3-legacy-vm/legacy22-v6-tune-command.json"
+    },
+    "separate_network_tuning_rollback": {
+      "status": "PASS",
+      "outcome": "EXPECTED_REBOOT_REQUIRED",
+      "freeze": "freeze-v6",
+      "actual_command_id": "v6_rollback_after_tune",
+      "shared_actual_command": true,
+      "shared_assertion_cases": [
+        "rollback_upgrade_after_acceptance",
+        "separate_network_tuning_rollback"
+      ],
+      "command_exit_code": 20,
+      "expected_exit_code": 20,
+      "duration_seconds": 1443.4192688465118,
+      "duration_display": "24 minutes 3 seconds on QEMU TCG",
+      "duration_scope": "One shared actual operation for two assertions; not two elapsed command durations and not a production estimate",
+      "pre_upgrade_files_restored": true,
+      "legacy_hold90_restored": true,
+      "loaded_module_retained": true,
+      "loaded_module_requires_separate_reboot": true,
+      "changed_network_values_restored": {
+        "net.core.default_qdisc": "fq_codel",
+        "net.ipv4.tcp_congestion_control": "cubic",
+        "net.core.rmem_max": "212992",
+        "net.core.wmem_max": "212992",
+        "net.ipv4.tcp_rmem": "4096 131072 6291456",
+        "net.ipv4.tcp_wmem": "4096 16384 4194304",
+        "net.core.netdev_max_backlog": "1000",
+        "net.core.somaxconn": "4096",
+        "net.ipv4.tcp_max_syn_backlog": "256",
+        "net.ipv4.tcp_fastopen": "1",
+        "net.ipv4.tcp_mtu_probing": "0",
+        "net.ipv4.tcp_slow_start_after_idle": "1",
+        "net.ipv4.tcp_fin_timeout": "60",
+        "net.ipv4.tcp_tw_reuse": "2",
+        "net.netfilter.nf_conntrack_max": "65536"
+      },
+      "changed_network_values_restored_count": 15,
+      "no_ndpi_rules": true,
+      "foreign_firewall_preserved": true,
+      "extra_restore_paths": [
+        "/etc/ds-guard/domain-generation.env"
+      ],
+      "original_vendor_installation_removed": false,
+      "immutable_before_sha256": "b24408d81eb905576cf0a08ba767593482bda8fd2d92db73931672777a12edd0",
+      "sealed_after_sha256": "a46c98096751e540374f220b8654d18c077b11fb9a026d34013a7788e5ba1494",
+      "records_sha256": "1a12dd801eb06160e5d885bbca9ff5d130f7283ebedf4744405485b51c035c57",
+      "firewall_steps_completed": 227,
+      "firewall_steps_total": 227,
+      "receipt": "review3-legacy-vm/legacy22-v6-rollback-upgrade-accepted.json",
+      "command_receipt": "review3-legacy-vm/legacy22-v6-rollback-upgrade-command.json"
+    },
+    "failed_repeat_attempt": {
+      "status": "FAILED_ATTEMPT_PRESERVED",
+      "attempt": 1,
+      "scenario": "full-repeat",
+      "command_exit_code": 1,
+      "duration_seconds": 398,
+      "duration_scope": "Elapsed operation time",
+      "application_health": {
+        "strict_https": true,
+        "target": "Google HTTPS",
+        "curl_exit_code": 28,
+        "timeout_seconds": 20,
+        "received_bytes": 0
+      },
+      "product_transaction_rolled_back": true,
+      "subsequent_scenarios_started": false,
+      "product_bug_proven": false,
+      "root_cause": "UNDETERMINED",
+      "counted_as_pass": false,
+      "receipt": "review3-legacy-vm/legacy22-v4-full-repeat-command.json",
+      "next_step": "Read-only HTTPS and VM state controls; one exact retry only after controls pass",
+      "superseded_by_later_retry": false,
+      "rollback_receipt": "review3-legacy-vm/legacy22-v4-full-repeat-txn-rolled-back",
+      "independent_rollback_readback_receipt": "review3-legacy-vm/legacy22-v4-repeat-rollback-readback.json",
+      "freeze": "freeze-v4"
+    },
+    "failed_new_cycle_attempt": {
+      "status": "FAILED_ATTEMPT_PRESERVED",
+      "freeze": "freeze-v4",
+      "scenario": "new-cycle after rollback",
+      "command_exit_code": 78,
+      "expected_exit_code": 0,
+      "duration_seconds": 388.89663457870483,
+      "duration_scope": "Elapsed operation on QEMU TCG; not a production duration estimate",
+      "worker_local_acceptance_passed": true,
+      "worker_local_layers": 3,
+      "worker_strict_https": true,
+      "lifecycle_seal_completed": false,
+      "premature_ready_status_printed": true,
+      "counted_as_pass": false,
+      "failure": "apt-mark final read-only snapshot attempted cache rename and received ENOENT during APT Daily activity",
+      "receipt": "review3-legacy-vm/legacy22-v4-new-cycle-command.json",
+      "diagnostic_receipt": "review3-legacy-vm/legacy22-v4-newcycle-diagnostics.json",
+      "worker_acceptance_receipt": "review3-legacy-vm/legacy22-v4-new-cycle-txn-acceptance.json",
+      "original_log": "review3-legacy-vm/legacy22-v4-new-cycle.log",
+      "original_result_retained": true
+    },
+    "lab_seal_only_recovery": {
+      "status": "PASS",
+      "freeze": "freeze-v5",
+      "scope": "explicit gated LAB-only seal recovery; not production automatic recovery",
+      "attempt": 2,
+      "duration_seconds": 44.77989864349365,
+      "duration_scope": "Elapsed isolated LAB operation; not a production estimate",
+      "installed_library_kept_v4": true,
+      "immutable_before_preserved": true,
+      "pending_removed_by_normal_seal": true,
+      "no_runtime_mutations": true,
+      "files_rules_units_values_packages_unchanged": true,
+      "source_manifest_sha256": "32ba4882dc4ce7f66cc88606295fe3f41f5a62ffbf6b2ff6fa99bb8bc842e7cc",
+      "receipt": "review3-legacy-vm/legacy22-v5-seal-recovery-accepted.json",
+      "raw_gate_before_receipt": "review3-legacy-vm/legacy22-v5-seal-recovery-retry-gate-before.json",
+      "raw_gate_after_receipt": "review3-legacy-vm/legacy22-v5-seal-recovery-retry-gate-after.json",
+      "production_automatic_recovery_claimed": false
+    },
+    "failed_v5_bank_rotation_repeat_attempt": {
+      "status": "FAILED_ATTEMPT_PRESERVED",
+      "freeze": "freeze-v5",
+      "scenario": "full-repeat",
+      "command_exit_code": 78,
+      "expected_exit_code": 0,
+      "duration_seconds": 51.918967485427856,
+      "duration_scope": "Elapsed operation on QEMU TCG; not a production duration estimate",
+      "counted_as_pass": false,
+      "failure": "Exact managed-firewall comparison refused a normal timer A/B bank change with unchanged proven policy",
+      "bank_normalized_policy_equal_in_two_read_only_samples": true,
+      "foreign_rules_and_hook_positions_exact": true,
+      "changed_owned_file": "/etc/ds-guard/domain-generation.env",
+      "pending_exists_at_diagnostic": false,
+      "receipt": "review3-legacy-vm/legacy22-v5-full-repeat-command.json",
+      "diagnostic_receipt": "review3-legacy-vm/legacy22-v5-repeat-bank-equivalence.json",
+      "evidence_index": "review3-legacy-vm/evidence-index-v5-bank-rotation-refusal.json",
+      "original_log": "review3-legacy-vm/legacy22-v5-full-repeat.log",
+      "subsequent_scenarios_started": false
+    },
+    "shutdown": {
+      "status": "PASS",
+      "freeze": "freeze-v6",
+      "receipt": "review3-legacy-vm/legacy22-v6-integration-summary.json",
+      "final_readback_receipt": "review3-legacy-vm/legacy22-v6-final-readback.json",
+      "source_and_installed_exact_to_freeze_v6": true,
+      "executed_file_count": 74,
+      "graceful_poweroff": true,
+      "qemu_exit_code": 0,
+      "serial_power_down": true,
+      "base_image_unchanged": true,
+      "base_image_sha256": "3fc9e0492b4b9295d5f10e53030c706b7f2ba1e1ca51edce09ed15a3b04c1683",
+      "overlay_retained": true
+    },
+    "final_readback": {
+      "status": "PASS",
+      "freeze": "freeze-v6",
+      "receipt": "review3-legacy-vm/legacy22-v6-final-readback.json",
+      "accepted_active_guard_before_shutdown": true,
+      "source_and_installed_exact_to_freeze_v6": true,
+      "executed_file_count": 74,
+      "no_pending": true,
+      "no_probe_rules": true,
+      "dpkg_audit_clean": true,
+      "new_kernel_faults": 0,
+      "foreign_preserved": true
+    }
+  },
+  "preserved_harness_failures": [
+    {
+      "receipt": "review3-legacy-vm/legacy22_v4_fence_cold_verify.json",
+      "exit_code": 1,
+      "classification": "Failed original harness assertion; retained unchanged; not counted as PASS"
+    },
+    {
+      "receipt": "review3-legacy-vm/legacy22_v4_fence_cold_verify_after_poweroff.json",
+      "exit_code": 1,
+      "classification": "Failed original harness assertion; retained unchanged; not counted as PASS"
+    }
+  ],
+  "independent_corrected_fence_check": {
+    "receipt": "review3-legacy-vm/legacy22_v4_fence_cold_verify_journal_proof.json",
+    "exit_code": 0
+  },
+  "capability_boundaries": {
+    "known_held_legacy_version": "1.7.11",
+    "unknown_legacy_or_2x": "REFUSE_BEFORE_MUTATION",
+    "legacy_rollback_target": "Immediate pre-upgrade held state; never the unknown pre-vendor state",
+    "legacy_disable_supported": false,
+    "legacy_remove_supported": false,
+    "fresh_modes_supported": [
+      "full",
+      "kernel",
+      "tune",
+      "guard",
+      "check",
+      "status",
+      "disable",
+      "remove"
+    ],
+    "automatic_reboot": false,
+    "force_unload_livepatch": false,
+    "code20_means": "Separate planned reboot or boot-selection step required; repeat the same command afterward",
+    "dns_nfqueue_filtering_across_intermediate_reboot_accepted": false,
+    "production_client_path_accepted": false,
+    "ipv6_filtering_accepted": false,
+    "peak_load_accepted": false,
+    "continuous_long_term_operation_accepted": false,
+    "unsafe_historical_vendor_binary_executed_in_legacy_fixture": false
+  },
+  "historical_evidence": [
+    "VALIDATION_EVIDENCE.json",
+    "REVIEW2_VALIDATION.json",
+    "HISTORICAL_DSG1_VALIDATION.md"
+  ],
+  "local_receipt_index": [
+    {
+      "local_receipt": "review3-legacy-vm/review3-v4-code-hashes.json",
+      "sha256": "4a1a736cc15ec77067f70c358bb33ed3e2e28f618d286e12ad9052623722188d"
+    },
+    {
+      "local_receipt": "review3-bootstrap-tests.json",
+      "sha256": "be2346bc0ccaa20c9e1ad11e3b4fc72069249f0c64d727013b648fc22ef55285"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-fence-cold-blocked.json",
+      "sha256": "eb52de16ad6a61746c7e1868ca5909f015e8b669fd3e0cbc2d4fec1675acd16b"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-fence-restored.json",
+      "sha256": "1d42e7e20dc3b9b411b1106b2abbef862740a6ce2577345c89334f34e8413459"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-intentional-failure-accepted.json",
+      "sha256": "e9d8428d72ee412983741fb96fa51096f9c4999b69b0d955261222a1549c8bc9"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22_v4_fence_cold_verify.json",
+      "sha256": "656a823804c182554a0264d9a33c4e1bb26d6da2736d98600a3e3dc572122878"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22_v4_fence_cold_verify_after_poweroff.json",
+      "sha256": "6ab5d9bf78353dbfa6b905e77a73691cbfd05f3889daf2337a7e5cd84b21c7f9"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22_v4_fence_cold_verify_journal_proof.json",
+      "sha256": "ec1af45d19700202a064247cf793aacbc798e7f7e4fe4e2beeed8a92b20fc9a7"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-activation-retry-accepted.json",
+      "sha256": "bf09148ee3be83ea28d81adee43b89f906ec76058e53aa8acb842afaed779443"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-full-repeat-command.json",
+      "sha256": "d34927376e90dde857a6e7db817a08fd32e66fe1f3597a4f873ea1e208fe9b3f"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-full-repeat-txn-rolled-back",
+      "sha256": "713afb0cd9a6cddfa15021a34ba49f3613b7f755ccdc8f88479d9bfe7eafb09b"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-repeat-rollback-readback.json",
+      "sha256": "5213c1bf1de0706fdb481a17f8879b560067090265a66eecb1693c665c544259"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-full-repeat-retry-accepted.json",
+      "sha256": "60d8abbcf08a01c15a4f418890b662b191076417a053b8a3fcb7405a3ba9fb1b"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-full-repeat-retry-command.json",
+      "sha256": "96554413a29664256760ab70e75a265725a12a5800c989231ae665e7969a6a30"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-rollback-upgrade-accepted.json",
+      "sha256": "86c3bafacf96aee98120c23cfbfe4e6dc1162ad097f0eef71c8ede208e6b911a"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-rollback-upgrade-command.json",
+      "sha256": "6460b0da7d6b16e229bc9d8f8d62ff8d53324fa74ea130c4c74e3e7d44aef44f"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-rollback-repeat-command.json",
+      "sha256": "0f0620bc49bdf44c946e4e0ef24136761f0c4312ad50ba7f0a18845d41a81b21"
+    },
+    {
+      "local_receipt": "review3-v5-local-validation.json",
+      "sha256": "cb2247e3ff7fea97aa2f907b0e28924239386def0bb43fd4f59b068489998580"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-new-cycle-command.json",
+      "sha256": "3fcae11d2fc8cccafeafdc0cf696a1fa11c4fe6d21025ea85642eda6bd6787cc"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-newcycle-diagnostics.json",
+      "sha256": "04aa3894bc80c898cf8de0e771e0b176f01b27eec8a559032739a3f7660e1744"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-new-cycle-txn-acceptance.json",
+      "sha256": "381cb76ff5b79fbfb45b66093f2bbca6af41bec22ac6a4f37b0148ccc2947df2"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-new-cycle.log",
+      "sha256": "1af117863e9ff457fd76e8e7c280bf02f2c63fde766f5ce3038117c02686e442"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v5-seal-recovery-accepted.json",
+      "sha256": "92f23b4f04e78d034202f420c32070834595df1b41b72543e2c089a6ce82e4f5"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22_v5_seal_recovery.json",
+      "sha256": "104165525719dff00321878f01feeb45f60ec0864e53dd381a4558afc5ec0654"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22_v5_seal_recovery_retry.json",
+      "sha256": "7abdaac56b41c31617b267dcee65f6a99d4651eb194566ad8df8910ae479fcdd"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v5-seal-gate-diagnostic.json",
+      "sha256": "540438165ec2f6a3d91c7f835b182a8c31db49def160d5982b2cde518a7bfb64"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v5-seal-recovery-retry-gate-before.json",
+      "sha256": "b3364bbcdcb88b47749698b3084d2a0c916443818533f41f6c405d6ab3384f72"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v5-seal-recovery-retry-gate-after.json",
+      "sha256": "d3845c1706127e9729eb0c745c32aa13385167dfa41e7a06b0dff6f5f7016229"
+    },
+    {
+      "local_receipt": "review3-v6-local-validation.json",
+      "sha256": "9134ec3b63d960f4c7f89d3aaa543ed58e194a7a18c36e722f8240f73b43b6a5"
+    },
+    {
+      "local_receipt": "review3-v6-local-tests.log",
+      "sha256": "a362689329b8c9978b21dbea00e1a9d83f9bb6c6f1814da9cdee7047ba6efad0"
+    },
+    {
+      "local_receipt": "review3-v6-tested-package-SHA256SUMS",
+      "sha256": "8d00efbd26640a78d3e822ea3bb4e3e679be3de588ab49d2bae1416309563803"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/evidence-index-v5-bank-rotation-refusal.json",
+      "sha256": "68d775f1f2e77d15243016db6e4e35ae78e957537344d0a5ba5ee0d7d0a81f95"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v5-full-repeat-command.json",
+      "sha256": "fefc0ab413aee17003241c8813027e83227f90ea8d136d134aa6a54ef2f00356"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v5-full-repeat.log",
+      "sha256": "f696aa465b5e0e0486aefb829a3d2183daa0b5da06a23cfd7c6f3877c125c410"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v5-repeat-bank-equivalence.json",
+      "sha256": "a2f0cfa30f1b60e20254bf8831c8d0fac85f5a3f992f069a6af326e0b3e90a09"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v5-repeat-refusal-diagnostic.json",
+      "sha256": "5e2e2449789fe3dacab07256ecb76d3875f3fd8c77ce3a5c9b1c99899c7ef3ba"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v5-repeat-refusal-after.json",
+      "sha256": "8108b27ba2aa1eaf82cb894d2e828cc7cf39894c4bc9f27cf5cd210dad26bfda"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-full-repeat-accepted.json",
+      "sha256": "4668208b9231a7e2e5944f7b80b5902871f67887bd0a00bcf38f1d57cb69f0c7"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-full-repeat-command.json",
+      "sha256": "abf529bb60223a439e0649f6e8d6ac71ec55a83cd05973273c82fd6bce492429"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-full-repeat.log",
+      "sha256": "67b773838d3af2eda97963801ad07ed06d86d3143dcb203f4803d6ff8d9c441c"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/evidence-index-v6-full-repeat-pass.json",
+      "sha256": "965a5f7ace0fc2c8ca3831496a3bd0f9b0997a8197506b55b10e512a7833c78d"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-before-tune-generation-accepted.json",
+      "sha256": "9e5b4c6ff484990d2d28643c6045eb00123da9b6cf99f97d2d33dd60e80c5de2"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-before-tune-generation-before.json",
+      "sha256": "afbc89be427084512cebbe977a9fdabd134e4a7bf24237bb24bd1ac06ddbc44e"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-tune-accepted.json",
+      "sha256": "f7d3d8e15498c33ddcbfb54ae20ad0bec5b1951e1170fdb1620c6c83dbe70651"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-tune-command.json",
+      "sha256": "a7b6cf68f863c7fd7a3fbb26104cc1fa998d1a5b876a7a5a17b589c002d10263"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-tune.log",
+      "sha256": "c9c4310dc4b6abc5e88a8ef94f853ecfdb16703e83de8e98d583ee105f7df667"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/evidence-index-v6-tune-pass-rotation-pending.json",
+      "sha256": "8398a5d971d75d1dfa6e156b5b01874e5b817db1556d405a9ba8fccd26dae157"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-extra-generation-restore-preconditions.json",
+      "sha256": "470d84cc92ec8c02932dc360a6b82a957a34ae1e443920f042e38412fd203e52"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v4-new-cycle-lifecycle-before.json",
+      "sha256": "b24408d81eb905576cf0a08ba767593482bda8fd2d92db73931672777a12edd0"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-before-rollback-rotation-reference.json",
+      "sha256": "a46c98096751e540374f220b8654d18c077b11fb9a026d34013a7788e5ba1494"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-before-rollback-rotation-after.json",
+      "sha256": "5242be751d3c924b0fd2d7ca0db12ef29be30c4a5de782982eb4c50279922947"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-before-rollback-rotation-accepted.json",
+      "sha256": "c5d03b12a2369cc5c04cc58dfa39ceb9d0bbcab3235c145f2b8dc66e9afcd278"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-rollback-upgrade-accepted.json",
+      "sha256": "f26ae0612b8e1ac0b633476a4ab6651b4cd4c72c423c4464ce02674e8dac4e3b"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-rollback-upgrade-command.json",
+      "sha256": "73cd0b6c1b4d8b9ce005ba5c46f6da92b31d289ae5d42ec33b4106fba17f8b07"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-rollback-upgrade.log",
+      "sha256": "b203e61a3c80627f9825a039f73a7897c6c0d525a8476007b77a8078c6ceb07f"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/evidence-index-v6-shared-rollback-pass.json",
+      "sha256": "34307ecc0fa520b2727f2afe09ea469ef488767f717113c3215bb96951c83f00"
+    },
+    {
+      "local_receipt": "vm_legacy22_v6_workflow.sh",
+      "sha256": "abd8352ceff5f9730ea0c1eadc2eb3ac671d7b0c6c76c970417608f302ef125d"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-rollback-repeat-accepted.json",
+      "sha256": "23496756adf26a6ba72077447701466add339d0161dd9e35ceb5e5dad462bc17"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-rollback-repeat-command.json",
+      "sha256": "2d5d3a6a429fa7d022a00811d164ea54c0c1af8cb1287aa881e0b217f863da61"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-rollback-repeat.log",
+      "sha256": "6c5c73eb307292553191094e174bde3159284fc58593c4ccac51ea406092ece2"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-new-cycle-accepted.json",
+      "sha256": "8860c75d94518575c565394fb70c1148abe7d4a6aa21fb80a7a84b74418e8ef5"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-new-cycle-command.json",
+      "sha256": "2eb782f4c0618f18a27a91ff573f4755f09394661682074bec7d08d220b521b2"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-new-cycle.log",
+      "sha256": "ebdcf724ab2d76af26c2bfdc2d968c5e3468200c29d4907b468da1c9235f4ba4"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/evidence-index-v6-five-commands-pass.json",
+      "sha256": "0f26a05a77d5de678ddd7f3552d8c4d561a5ed3000e586877a512c321e9b745d"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-integration-summary.json",
+      "sha256": "a680347eb9533fdf4d80f63777a973a59b1b2c0e8be72db707500809111bcfc5"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-final-readback.json",
+      "sha256": "ca0be6ce375884af3ab1563fbe711cb2d26b5f07b6a1c3f898767c9a5eb35095"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22_v6_final_poweroff.json",
+      "sha256": "1e7d62592788f91cd95a35be7f0ce5b378406e09ff15a8677c1e5febc8a2fbd9"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/evidence-index-v6-final-complete.json",
+      "sha256": "8cc297bac19362df562603c0bac7e46dadcbf53f7058c79448863bd4da1251ef"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v6-live-rotation-accepted.json",
+      "sha256": "c54bd06d4fb7e82a06e78ef29559be8a52e0d715b69901420ff0ec5289a46c10"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v2-stage-accepted.json",
+      "sha256": "d667ccb6dafbeb816aa355154f909b97c01996604779dbb84396d9fdb5de75d7"
+    },
+    {
+      "local_receipt": "review3-legacy-vm/legacy22-v2-candidate-boot-ready.json",
+      "sha256": "c9216f8047179cf10c848cc63b12c2677578e810bbfa59d47c692d61d50d9cb0"
+    }
+  ],
+  "source_tag": "v1.7.11-dsg2-rc3",
+  "publication_verification": "external release checksum and anonymous readback receipt; not encoded in this archive",
+  "power_loss_recovery_tested": false,
+  "automatic_recovery_guaranteed": false,
+  "power_loss_boundary": {
+    "cold_boot_activation_fence_tested": true,
+    "complete_power_loss_recovery_proven": false,
+    "lifecycle_before_after_progress_completed": "atomic replace without fsync",
+    "new_marker_hold90_activation_fence": "written with fsync",
+    "process_interruption_resume": "checks the exact step state",
+    "post_power_loss_journal_completeness_proven": false,
+    "post_power_loss_journal_provenance_proven": false,
+    "post_power_loss_automatic_continuation_proven": false,
+    "independent_narrow_review_confirmed_p1_old_ndpi_reactivation": false,
+    "safe_refusal_guaranteed_in_all_power_loss_cases": false,
+    "runtime_changed_to_address_this_limitation": false,
+    "classification": "Known prerelease limitation; production acceptance remains false"
+  },
+  "historical_freezes": {
+    "freeze-v4": {
+      "freeze": {
+        "name": "freeze-v4",
+        "source_manifest_sha256": "d0174a2e0fe5603eb2415038ff63860dc8aa46f29f2296494f7ae6874ec7768a",
+        "code_sha256": {
+          "activation_guard.py": "2f64298667847919c10cbfdd29bda05cecfbe3810f37840ad1e0696d35fbec40",
+          "controller.py": "16b94118990065d781cfcc1c98a48a99b0985af1aef8f2b26c59b8c383bc2037",
+          "install_prebuilt.py": "e870f8159150900c6c9061295ad09de7a9694fcb7d8bf1d236579962c8d20816",
+          "kernel-stage.py": "68c2ba65accd621128473fa9d8c0d53c952f8db5e2137870405fad707357036d",
+          "legacy_context.py": "8847c97b1f312b9690f261d756d232afd15ba6e2a490a45815e407a9ed8f8b28",
+          "legacy_upgrade.py": "88b00c76eeeb84c023220d13498d409a5e9bdc28b57b304650ba790e11639a5c",
+          "lifecycle.py": "46ca0e24b824b8ef880318c69998440acdcc018ed007cada21c8bb399830ddea",
+          "module_identity.py": "257ff6c36514dbfffe46e7e42064c442d90a8a48b653679e1d2ebf8e474c0213",
+          "network_tuning.py": "e6e90874bc98733d1ff626c5d93fc2abf2c2bc3ee5b6736371e6c5950dfa675d",
+          "package_install_gate.py": "e87857aa6e092e9f9c93bb8d58c0df53e2c5152f1dacaf3c8889aa1cce840d29",
+          "package_transactions.py": "9bda12f00abc67c38eb397b16e00c0c9d16bdb9c4d64b8599533171a65aadf50",
+          "patch_sources.py": "fc867eb21d6f72812449ff024ee0f3262329980d28ebeba1e23aff8deee5682c",
+          "preflight.py": "8f2c544801a7896db9ddeae5f0b99d9460ca129a842fd7f7de2120934c7b3d6b",
+          "recover.py": "c28526a6cf55370647113e546a8f7c5f724cfda75d0d0326f3d4fc8a2a36aa84",
+          "rollback_upgrade.py": "45b851cb3f0e75f67b8a8ceffeab2cb4add0e4744f98db9f39eae00b5a6949d1",
+          "run_worker.py": "b940f26b0f68e10859950893576087b470b1d72ea540491ce29dbd7e59278ee3",
+          "setup_ru.py": "d631f158c1c03616d7048768a94093cacdc48dd8c9af03b65c9fbe6deb5d5183",
+          "test_activation_guard.py": "f54e26e0507dfaa9812a3d9ba21f7ba2ce48b6b52d3457dc23db0b0071acb218",
+          "test_allocator.py": "ae5d1a7eb85f6512e40157a0e30ae18988dd4d4c4da822bc75e66c577e24f9d4",
+          "test_compat72_copy.py": "ad76ddf184c85bb8f9d2242e3c73a7114f56d746954c8d4d8d91125e2cd95f54",
+          "test_hostname_bounds.py": "14f5b81b2067fc30425c84df320fcfc517c8f8cfa9b856f36a78d754cc5340d0",
+          "test_legacy_context.py": "f037b353de902c77933a42198de1d8851fea3ae227f614e6471d1af8bf81ce87",
+          "test_legacy_lifecycle.py": "5d575e272e7da8f1b3b6d9b9c4c6e6a9b47133c1b65a709f9c851fc23d75f809",
+          "test_legacy_upgrade.py": "b6d08b905e773cd5d9add6fbd4869a4c88ee910d8619a1aa5aa70e248291a846",
+          "test_lifecycle_ownership.py": "cc410abc86254aad09b1bbdb9b61987019ee7da9152d15206ccf2262e73c151c",
+          "test_listeners.py": "35f047308b3176732631402808822e09274af9c37645d4edad257d096c595adb",
+          "test_network_recovery.py": "c39a9df325931d3b7917c37b534b0ffd505f598a7d4c0db48b84563af6cedf06",
+          "test_package_install_gate.py": "74d3eb23a101072f285c44f2f444e6c7fce340bd909e99713e8f2ed3cd91d86e",
+          "test_package_transactions.py": "38414d1efd8863aed92f2b8538243c03a6fae3de7847e47dfc6f5a5501910d04",
+          "test_preflight.py": "fbcdfe4fface485e3a8c89b823e0ed5a9bd58615771755fe5abebf5d026b768f",
+          "test_rollback_upgrade.py": "dd188f4ff1d854e0b7a44849901ae54080329b41c1ac3d3bbb82e459e4a2e025",
+          "test_setup_lifecycle.py": "cb5ddf8481e65cf588b122373e1f075d5362da573a1dba195c2c70bdb64197be",
+          "test_transaction.py": "3b93542934fd38696cd63d2a6eb25f7d2b61f4f0a7331aabdb82ac00c672623f",
+          "transaction.py": "5923f7815b080c736db83d1bc56dc57d2bf6c3fb12d3e58b065219c6fa9ea428",
+          "bootstrap.sh": "7fbfc8e6ad709f306734ad5ed522ea7b999971600f6933258d30bf2c67445392",
+          "dkms-build.sh": "0fed63c2ea3f8507991919019c380cf777cf304b16e9781089792fbdcd83b73e",
+          "driver.sh": "28f32389a4f67e9322583cef38a5ee488059ca47e1e8d2b99153b49c1b0c3d1b",
+          "install.sh": "409b4a99024b50397a42faa7c574427d30d89b86488e479015e39f0bd69ca324",
+          "kernel-stage.sh": "a45572b50d114a15413b163464f83372788602f34ced38befcd15a46bcbd2ba7",
+          "reproduce-kernel.sh": "c7ece5c506dac0d7e540c007cac7b39547382618f4ef6e11d00ebc7f5582d8f8",
+          "safe-overrides.sh": "dd01b3e6963abded43a2a49add9811cd9e90cbc75f90f7f13f9d74127c7d9d01",
+          "setup.sh": "e61eb3c10cfe9c982b3245f2f91448ae582541db4a061a62819346b6f4acf0ec",
+          "vendor-library.sh": "425cfd66677683892ebb439810e2763259d78cb76770c85c758fa1fc1cae8d57"
+        },
+        "hash_scope": "Code snapshot under test; not the final archive after documentation changes."
+      },
+      "local_tests": {
+        "status": "PASS",
+        "passed": 159,
+        "failures": 0,
+        "skipped": 0,
+        "python_files_compiled": 34,
+        "shell_files_syntax_checked": 9,
+        "test_log_sha256": "b9e431b5dcb2a32bef082bae9b428d48e1f183e759768a99781c02091400d526"
+      }
+    },
+    "freeze-v5": {
+      "freeze": {
+        "name": "freeze-v5",
+        "source_manifest_sha256": "32ba4882dc4ce7f66cc88606295fe3f41f5a62ffbf6b2ff6fa99bb8bc842e7cc",
+        "code_sha256": {
+          "activation_guard.py": "2f64298667847919c10cbfdd29bda05cecfbe3810f37840ad1e0696d35fbec40",
+          "bootstrap.sh": "7fbfc8e6ad709f306734ad5ed522ea7b999971600f6933258d30bf2c67445392",
+          "controller.py": "16b94118990065d781cfcc1c98a48a99b0985af1aef8f2b26c59b8c383bc2037",
+          "dkms-build.sh": "0fed63c2ea3f8507991919019c380cf777cf304b16e9781089792fbdcd83b73e",
+          "driver.sh": "28f32389a4f67e9322583cef38a5ee488059ca47e1e8d2b99153b49c1b0c3d1b",
+          "install.sh": "409b4a99024b50397a42faa7c574427d30d89b86488e479015e39f0bd69ca324",
+          "install_prebuilt.py": "e870f8159150900c6c9061295ad09de7a9694fcb7d8bf1d236579962c8d20816",
+          "kernel-stage.py": "68c2ba65accd621128473fa9d8c0d53c952f8db5e2137870405fad707357036d",
+          "kernel-stage.sh": "a45572b50d114a15413b163464f83372788602f34ced38befcd15a46bcbd2ba7",
+          "legacy_context.py": "8847c97b1f312b9690f261d756d232afd15ba6e2a490a45815e407a9ed8f8b28",
+          "legacy_upgrade.py": "88b00c76eeeb84c023220d13498d409a5e9bdc28b57b304650ba790e11639a5c",
+          "lifecycle.py": "921a1d5712836cfaa6248800d59927f4a3b8d0ebf90ae93314a9e5bc6c70a475",
+          "module_identity.py": "257ff6c36514dbfffe46e7e42064c442d90a8a48b653679e1d2ebf8e474c0213",
+          "network_tuning.py": "e6e90874bc98733d1ff626c5d93fc2abf2c2bc3ee5b6736371e6c5950dfa675d",
+          "package_install_gate.py": "e87857aa6e092e9f9c93bb8d58c0df53e2c5152f1dacaf3c8889aa1cce840d29",
+          "package_transactions.py": "9bda12f00abc67c38eb397b16e00c0c9d16bdb9c4d64b8599533171a65aadf50",
+          "patch_sources.py": "fc867eb21d6f72812449ff024ee0f3262329980d28ebeba1e23aff8deee5682c",
+          "preflight.py": "8f2c544801a7896db9ddeae5f0b99d9460ca129a842fd7f7de2120934c7b3d6b",
+          "recover.py": "c28526a6cf55370647113e546a8f7c5f724cfda75d0d0326f3d4fc8a2a36aa84",
+          "reproduce-kernel.sh": "c7ece5c506dac0d7e540c007cac7b39547382618f4ef6e11d00ebc7f5582d8f8",
+          "rollback_upgrade.py": "45b851cb3f0e75f67b8a8ceffeab2cb4add0e4744f98db9f39eae00b5a6949d1",
+          "run_worker.py": "b940f26b0f68e10859950893576087b470b1d72ea540491ce29dbd7e59278ee3",
+          "safe-overrides.sh": "dd01b3e6963abded43a2a49add9811cd9e90cbc75f90f7f13f9d74127c7d9d01",
+          "setup.sh": "e61eb3c10cfe9c982b3245f2f91448ae582541db4a061a62819346b6f4acf0ec",
+          "setup_ru.py": "bea7742344594da6338a5799b271c37e15d4f57fca0b8b5fa89baa66ef0a5fac",
+          "test_activation_guard.py": "f54e26e0507dfaa9812a3d9ba21f7ba2ce48b6b52d3457dc23db0b0071acb218",
+          "test_allocator.py": "ae5d1a7eb85f6512e40157a0e30ae18988dd4d4c4da822bc75e66c577e24f9d4",
+          "test_apt_readonly.py": "653a2d053862e8ad7abdcb03773f0a08069a30da8440f650c4918f89538026e0",
+          "test_compat72_copy.py": "ad76ddf184c85bb8f9d2242e3c73a7114f56d746954c8d4d8d91125e2cd95f54",
+          "test_hostname_bounds.py": "14f5b81b2067fc30425c84df320fcfc517c8f8cfa9b856f36a78d754cc5340d0",
+          "test_legacy_context.py": "f037b353de902c77933a42198de1d8851fea3ae227f614e6471d1af8bf81ce87",
+          "test_legacy_lifecycle.py": "5d575e272e7da8f1b3b6d9b9c4c6e6a9b47133c1b65a709f9c851fc23d75f809",
+          "test_legacy_upgrade.py": "b6d08b905e773cd5d9add6fbd4869a4c88ee910d8619a1aa5aa70e248291a846",
+          "test_lifecycle_ownership.py": "cc410abc86254aad09b1bbdb9b61987019ee7da9152d15206ccf2262e73c151c",
+          "test_listeners.py": "35f047308b3176732631402808822e09274af9c37645d4edad257d096c595adb",
+          "test_network_recovery.py": "c39a9df325931d3b7917c37b534b0ffd505f598a7d4c0db48b84563af6cedf06",
+          "test_package_install_gate.py": "74d3eb23a101072f285c44f2f444e6c7fce340bd909e99713e8f2ed3cd91d86e",
+          "test_package_transactions.py": "38414d1efd8863aed92f2b8538243c03a6fae3de7847e47dfc6f5a5501910d04",
+          "test_preflight.py": "fbcdfe4fface485e3a8c89b823e0ed5a9bd58615771755fe5abebf5d026b768f",
+          "test_rollback_upgrade.py": "dd188f4ff1d854e0b7a44849901ae54080329b41c1ac3d3bbb82e459e4a2e025",
+          "test_setup_lifecycle.py": "263df17980d7fa2c70f9a7207d4ae4c04f8d40dc2affe2a9c54d45eb967501cc",
+          "test_transaction.py": "3b93542934fd38696cd63d2a6eb25f7d2b61f4f0a7331aabdb82ac00c672623f",
+          "transaction.py": "5923f7815b080c736db83d1bc56dc57d2bf6c3fb12d3e58b065219c6fa9ea428",
+          "vendor-library.sh": "425cfd66677683892ebb439810e2763259d78cb76770c85c758fa1fc1cae8d57"
+        },
+        "changed_code_from_v4": [
+          "lifecycle.py",
+          "setup_ru.py",
+          "test_apt_readonly.py",
+          "test_setup_lifecycle.py"
+        ],
+        "hash_scope": "Code snapshot under test; not the final archive after documentation changes."
+      },
+      "local_tests": {
+        "status": "PASS",
+        "freeze": "freeze-v5",
+        "passed": 168,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "python_files_compiled": 35,
+        "shell_files_syntax_checked": 9,
+        "test_log_sha256": "f78a9e8f89b8ed0c2bb5c410efa30c4d3d56eb91fca8aed18b7640562b005dc2",
+        "receipt": "review3-v5-local-validation.json"
+      }
+    }
+  },
+  "v5_change": {
+    "runtime_files": [
+      "lifecycle.py",
+      "setup_ru.py"
+    ],
+    "test_files": [
+      "test_apt_readonly.py",
+      "test_setup_lifecycle.py"
+    ],
+    "behavior": [
+      "Read-only APT snapshots do not write shared APT caches",
+      "Final overall success is printed only after lifecycle sealing succeeds"
+    ],
+    "vm_acceptance_status": "HISTORICAL_LAB_SEAL_RECOVERY_PASS_FULL_REPEAT_REFUSED"
+  },
+  "v5_vm_plan": {
+    "scope": "gated isolated LAB only; not claimed production automatic recovery",
+    "cases": [
+      {
+        "name": "seal_only_recovery_of_proven_v4_operation",
+        "status": "PASS",
+        "uses_separate_v5_source": true,
+        "baseline_overwrite_allowed": false,
+        "receipt": "review3-legacy-vm/legacy22-v5-seal-recovery-accepted.json",
+        "duration_seconds": 44.77989864349365,
+        "attempt": 2
+      },
+      {
+        "name": "full_v5",
+        "status": "FAILED_ATTEMPT_PRESERVED",
+        "receipt": "review3-legacy-vm/legacy22-v5-full-repeat-command.json"
+      },
+      {
+        "name": "separate_tune_v5",
+        "status": "NOT_RUN_AFTER_REFUSAL"
+      },
+      {
+        "name": "rollback_upgrade_v5",
+        "status": "NOT_RUN_AFTER_REFUSAL",
+        "external_lab_wait_timeout_seconds": 2250
+      },
+      {
+        "name": "repeat_rollback_v5",
+        "status": "NOT_RUN_AFTER_REFUSAL"
+      },
+      {
+        "name": "new_cycle_v5",
+        "status": "NOT_RUN_AFTER_REFUSAL"
+      },
+      {
+        "name": "final_summary_and_vm_shutdown",
+        "status": "NOT_RUN_AFTER_REFUSAL"
+      }
+    ],
+    "timeout_scope": "2250 seconds is an external lab wait budget, not a production duration estimate or a new runtime timeout claim",
+    "historical": true
+  },
+  "publication_gate": "LAB_COMPLETE_PUBLICATION_NOT_PERFORMED",
+  "preserved_lab_gate_failures": [
+    {
+      "status": "FAILED_LAB_GATE_ATTEMPT_PRESERVED",
+      "attempt": 1,
+      "command_exit_code": 1,
+      "root_cause": "UNKNOWN",
+      "initial_raw_difference_captured": false,
+      "timer_causality_proven": false,
+      "counted_as_pass": false,
+      "receipt": "review3-legacy-vm/legacy22_v5_seal_recovery.json",
+      "later_diagnostic_receipt": "review3-legacy-vm/legacy22-v5-seal-gate-diagnostic.json",
+      "later_equal_state_does_not_explain_original_failure": true
+    }
+  ],
+  "historical_vm_results": {
+    "freeze-v4": {
+      "full_repeat": {
+        "status": "PASS",
+        "attempt": 2,
+        "command_exit_code": 0,
+        "duration_seconds": 243.6970956325531,
+        "duration_scope": "Elapsed operation on QEMU TCG; not a production duration estimate",
+        "local_layers": 3,
+        "strict_https": true,
+        "operator_application_check": true,
+        "foreign_firewall_preserved": true,
+        "immutable_baseline_preserved": true,
+        "receipt": "review3-legacy-vm/legacy22-v4-full-repeat-retry-accepted.json",
+        "command_receipt": "review3-legacy-vm/legacy22-v4-full-repeat-retry-command.json",
+        "first_failed_attempt_retained": "vm.failed_repeat_attempt",
+        "freeze": "freeze-v4"
+      },
+      "rollback_upgrade_after_acceptance": {
+        "status": "PASS",
+        "command_exit_code": 20,
+        "expected_exit_code": 20,
+        "duration_seconds": 1406.9347603321075,
+        "duration_display": "23 minutes 27 seconds on QEMU TCG",
+        "duration_scope": "Elapsed operation on QEMU TCG; not a production duration estimate",
+        "pre_upgrade_files_restored": true,
+        "legacy_hold90_restored": true,
+        "old_disk_module_restored": true,
+        "loaded_module_retained": true,
+        "no_ndpi_rules": true,
+        "foreign_firewall_preserved": true,
+        "loaded_module_requires_separate_reboot": true,
+        "original_vendor_installation_removed": false,
+        "receipt": "review3-legacy-vm/legacy22-v4-rollback-upgrade-accepted.json",
+        "command_receipt": "review3-legacy-vm/legacy22-v4-rollback-upgrade-command.json",
+        "outcome": "EXPECTED_REBOOT_REQUIRED",
+        "freeze": "freeze-v4"
+      },
+      "repeat_rollback_upgrade": {
+        "status": "PASS",
+        "outcome": "EXPECTED_REBOOT_REQUIRED",
+        "command_exit_code": 20,
+        "expected_exit_code": 20,
+        "duration_seconds": 26.369690418243408,
+        "duration_scope": "Elapsed operation on QEMU TCG; not a production duration estimate",
+        "loaded_module_requires_separate_reboot": true,
+        "original_vendor_installation_removed": false,
+        "receipt": "review3-legacy-vm/legacy22-v4-rollback-repeat-command.json",
+        "freeze": "freeze-v4"
+      },
+      "new_cycle_after_rollback": {
+        "status": "FAILED_ATTEMPT_PRESERVED",
+        "freeze": "freeze-v4",
+        "scenario": "new-cycle after rollback",
+        "command_exit_code": 78,
+        "expected_exit_code": 0,
+        "duration_seconds": 388.89663457870483,
+        "duration_scope": "Elapsed operation on QEMU TCG; not a production duration estimate",
+        "worker_local_acceptance_passed": true,
+        "worker_local_layers": 3,
+        "worker_strict_https": true,
+        "lifecycle_seal_completed": false,
+        "premature_ready_status_printed": true,
+        "counted_as_pass": false,
+        "failure": "apt-mark final read-only snapshot attempted cache rename and received ENOENT during APT Daily activity",
+        "receipt": "review3-legacy-vm/legacy22-v4-new-cycle-command.json",
+        "diagnostic_receipt": "review3-legacy-vm/legacy22-v4-newcycle-diagnostics.json",
+        "worker_acceptance_receipt": "review3-legacy-vm/legacy22-v4-new-cycle-txn-acceptance.json",
+        "original_log": "review3-legacy-vm/legacy22-v4-new-cycle.log",
+        "original_result_retained": true
+      }
+    },
+    "freeze-v5": {
+      "full_repeat": {
+        "status": "FAILED_ATTEMPT_PRESERVED",
+        "freeze": "freeze-v5",
+        "scenario": "full-repeat",
+        "command_exit_code": 78,
+        "expected_exit_code": 0,
+        "duration_seconds": 51.918967485427856,
+        "duration_scope": "Elapsed operation on QEMU TCG; not a production duration estimate",
+        "counted_as_pass": false,
+        "failure": "Exact managed-firewall comparison refused a normal timer A/B bank change with unchanged proven policy",
+        "bank_normalized_policy_equal_in_two_read_only_samples": true,
+        "foreign_rules_and_hook_positions_exact": true,
+        "changed_owned_file": "/etc/ds-guard/domain-generation.env",
+        "pending_exists_at_diagnostic": false,
+        "receipt": "review3-legacy-vm/legacy22-v5-full-repeat-command.json",
+        "diagnostic_receipt": "review3-legacy-vm/legacy22-v5-repeat-bank-equivalence.json",
+        "evidence_index": "review3-legacy-vm/evidence-index-v5-bank-rotation-refusal.json",
+        "original_log": "review3-legacy-vm/legacy22-v5-full-repeat.log",
+        "subsequent_scenarios_started": false
+      },
+      "lab_seal_only_recovery": {
+        "status": "PASS",
+        "freeze": "freeze-v5",
+        "scope": "explicit gated LAB-only seal recovery; not production automatic recovery",
+        "attempt": 2,
+        "duration_seconds": 44.77989864349365,
+        "duration_scope": "Elapsed isolated LAB operation; not a production estimate",
+        "installed_library_kept_v4": true,
+        "immutable_before_preserved": true,
+        "pending_removed_by_normal_seal": true,
+        "no_runtime_mutations": true,
+        "files_rules_units_values_packages_unchanged": true,
+        "source_manifest_sha256": "32ba4882dc4ce7f66cc88606295fe3f41f5a62ffbf6b2ff6fa99bb8bc842e7cc",
+        "receipt": "review3-legacy-vm/legacy22-v5-seal-recovery-accepted.json",
+        "raw_gate_before_receipt": "review3-legacy-vm/legacy22-v5-seal-recovery-retry-gate-before.json",
+        "raw_gate_after_receipt": "review3-legacy-vm/legacy22-v5-seal-recovery-retry-gate-after.json",
+        "production_automatic_recovery_claimed": false
+      }
+    }
+  },
+  "v5_final_matrix": {
+    "planned_actual_command_count": 5,
+    "required_assertion_count": 6,
+    "scope": "actual command executions are distinct from validation assertions",
+    "commands": [
+      {
+        "command_id": "v5_full",
+        "assertions": [
+          "full_repeat"
+        ],
+        "status": "FAILED_ATTEMPT_PRESERVED"
+      },
+      {
+        "command_id": "v5_tune",
+        "assertions": [
+          "separate_network_tuning"
+        ],
+        "status": "NOT_RUN_AFTER_REFUSAL"
+      },
+      {
+        "command_id": "v5_rollback_after_tune",
+        "assertions": [
+          "rollback_upgrade_after_acceptance",
+          "separate_network_tuning_rollback"
+        ],
+        "status": "NOT_RUN_AFTER_REFUSAL",
+        "shared_actual_command": true,
+        "external_lab_wait_timeout_seconds": 2250
+      },
+      {
+        "command_id": "v5_repeat_rollback",
+        "assertions": [
+          "repeat_rollback_upgrade"
+        ],
+        "status": "NOT_RUN_AFTER_REFUSAL"
+      },
+      {
+        "command_id": "v5_new_cycle",
+        "assertions": [
+          "new_cycle_after_rollback"
+        ],
+        "status": "NOT_RUN_AFTER_REFUSAL"
+      }
+    ],
+    "lab_seal_recovery_and_final_shutdown_counted_separately": true,
+    "historical": true
+  },
+  "v6_final_matrix": {
+    "planned_actual_command_count": 5,
+    "required_assertion_count": 6,
+    "scope": "actual command executions are distinct from validation assertions",
+    "commands": [
+      {
+        "command_id": "v6_full",
+        "assertions": [
+          "full_repeat"
+        ],
+        "status": "PASS",
+        "target_freeze": "freeze-v6",
+        "command_exit_code": 0,
+        "duration_seconds": 255.10475134849548,
+        "receipt": "review3-legacy-vm/legacy22-v6-full-repeat-accepted.json",
+        "command_receipt": "review3-legacy-vm/legacy22-v6-full-repeat-command.json"
+      },
+      {
+        "command_id": "v6_tune",
+        "assertions": [
+          "separate_network_tuning"
+        ],
+        "status": "PASS",
+        "target_freeze": "freeze-v6",
+        "command_exit_code": 0,
+        "duration_seconds": 88.67115259170532,
+        "receipt": "review3-legacy-vm/legacy22-v6-tune-accepted.json",
+        "command_receipt": "review3-legacy-vm/legacy22-v6-tune-command.json"
+      },
+      {
+        "command_id": "v6_rollback_after_tune",
+        "assertions": [
+          "rollback_upgrade_after_acceptance",
+          "separate_network_tuning_rollback"
+        ],
+        "status": "PASS",
+        "shared_actual_command": true,
+        "external_lab_wait_timeout_seconds": 2250,
+        "target_freeze": "freeze-v6",
+        "execution_state": "COMPLETED",
+        "command_exit_code": 20,
+        "expected_exit_code": 20,
+        "duration_seconds": 1443.4192688465118,
+        "receipt": "review3-legacy-vm/legacy22-v6-rollback-upgrade-accepted.json",
+        "command_receipt": "review3-legacy-vm/legacy22-v6-rollback-upgrade-command.json",
+        "outcome": "EXPECTED_REBOOT_REQUIRED"
+      },
+      {
+        "command_id": "v6_repeat_rollback",
+        "assertions": [
+          "repeat_rollback_upgrade"
+        ],
+        "status": "PASS",
+        "target_freeze": "freeze-v6",
+        "execution_state": "COMPLETED",
+        "command_exit_code": 20,
+        "expected_exit_code": 20,
+        "duration_seconds": 78.82390213012695,
+        "receipt": "review3-legacy-vm/legacy22-v6-rollback-repeat-accepted.json",
+        "command_receipt": "review3-legacy-vm/legacy22-v6-rollback-repeat-command.json"
+      },
+      {
+        "command_id": "v6_new_cycle",
+        "assertions": [
+          "new_cycle_after_rollback"
+        ],
+        "status": "PASS",
+        "target_freeze": "freeze-v6",
+        "execution_state": "COMPLETED",
+        "command_exit_code": 0,
+        "expected_exit_code": 0,
+        "duration_seconds": 426.0743327140808,
+        "receipt": "review3-legacy-vm/legacy22-v6-new-cycle-accepted.json",
+        "command_receipt": "review3-legacy-vm/legacy22-v6-new-cycle-command.json"
+      }
+    ],
+    "lab_seal_recovery_and_final_shutdown_counted_separately": true,
+    "real_equal_baseline_and_sealed_generation_case_required": true,
+    "generation_restore_case": {
+      "status": "PASS",
+      "before_tune_generation_matches_immutable_before": true,
+      "preparation_used_extra_apply": false,
+      "preparation_receipt": "review3-legacy-vm/legacy22-v6-before-tune-generation-accepted.json",
+      "baseline_equals_sealed_generation": true,
+      "live_generation_differs_from_sealed": true,
+      "baseline_generation_restored": true,
+      "rollback_shared_with_assertions": [
+        "rollback_upgrade_after_acceptance",
+        "separate_network_tuning_rollback"
+      ],
+      "product_bank_proof_true": true,
+      "preconditions_receipt": "review3-legacy-vm/legacy22-v6-extra-generation-restore-preconditions.json",
+      "raw_evidence": {
+        "legacy22-v4-new-cycle-lifecycle-before.json": "b24408d81eb905576cf0a08ba767593482bda8fd2d92db73931672777a12edd0",
+        "legacy22-v6-before-rollback-rotation-reference.json": "a46c98096751e540374f220b8654d18c077b11fb9a026d34013a7788e5ba1494",
+        "legacy22-v6-before-rollback-rotation-after.json": "5242be751d3c924b0fd2d7ca0db12ef29be30c4a5de782982eb4c50279922947",
+        "legacy22-v6-before-rollback-rotation-accepted.json": "c5d03b12a2369cc5c04cc58dfa39ceb9d0bbcab3235c145f2b8dc66e9afcd278"
+      },
+      "executed_harness_sha256": "abd8352ceff5f9730ea0c1eadc2eb3ac671d7b0c6c76c970417608f302ef125d",
+      "restoration_receipt": "review3-legacy-vm/legacy22-v6-rollback-upgrade-accepted.json",
+      "restoration_harness": "vm_legacy22_v6_workflow.sh",
+      "actual_command_id": "v6_rollback_after_tune",
+      "firewall_steps_completed": 227,
+      "firewall_steps_total": 227,
+      "restoration_assertion_before_accepted_receipt": true,
+      "final_summary_receipt": "review3-legacy-vm/legacy22-v6-integration-summary.json",
+      "post_rollback_generation_exact_assertion_passed": true,
+      "post_repeat_rollback_generation_exact_assertion_passed": true
+    },
+    "completed_actual_command_count": 5,
+    "passed_assertion_count": 6,
+    "commands_and_assertions_status": "PASS"
+  },
+  "v6_final_summary_and_shutdown": {
+    "status": "PASS",
+    "freeze": "freeze-v6",
+    "receipt": "review3-legacy-vm/legacy22-v6-integration-summary.json",
+    "final_readback_receipt": "review3-legacy-vm/legacy22-v6-final-readback.json",
+    "source_and_installed_exact_to_freeze_v6": true,
+    "executed_file_count": 74,
+    "graceful_poweroff": true,
+    "qemu_exit_code": 0,
+    "serial_power_down": true,
+    "base_image_unchanged": true,
+    "base_image_sha256": "3fc9e0492b4b9295d5f10e53030c706b7f2ba1e1ca51edce09ed15a3b04c1683",
+    "overlay_retained": true
+  },
+  "v6_change": {
+    "vm_acceptance_status": "PASS",
+    "behavior": [
+      "Accept only proven equivalent A/B domain bank rotation with exact generation reconstruction, root ownership and mode, unchanged critical inputs, ordered rules, hook positions and foreign policy",
+      "Capture generation and firewall under the bounded reentrant vendor apply lock",
+      "Rollback keeps original before/after journal identity and records separately proven generation restore ownership, even when before and after generation stamps are equal",
+      "Rollback holds the apply lock from coherent capture until old holds are restored and guards stopped; long firewall restoration and package operations occur after releasing it",
+      "Interrupted firewall rollback still requires the exact recorded step before/after; equivalent bank normalization is never a resume wildcard"
+    ],
+    "arbitrary_dns_rotation_supported": false,
+    "original_journals_rebased": false,
+    "automatic_power_loss_recovery_claimed": false
+  },
+  "publication_status": "NOT_PERFORMED",
+  "source_tag_publication_status": "NOT_PERFORMED"
+}

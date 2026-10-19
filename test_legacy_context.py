@@ -38,12 +38,13 @@ class LegacyEntryGate(unittest.TestCase):
 
     def test_cold_resume_accepts_only_disappeared_legacy_rules(self):
         rule='-A OUTPUT -o eth0 -j DS_DOMAINS'
-        b={'files':{},'values':{},'packages':{},'iptables':rule,'baseline_kind':'legacy-upgrade'}
-        a=dict(b);current={**a,'iptables':''}
+        wrap=lambda rules:'*filter\n:OUTPUT ACCEPT [0:0]\n:DS_DOMAINS - [0:0]\n'+rules+'\nCOMMIT'
+        b={'files':{},'values':{},'packages':{},'iptables':wrap(rule),'baseline_kind':'legacy-upgrade'}
+        a=dict(b);current={**a,'iptables':wrap('')}
         with self.assertRaises(RuntimeError):lifecycle.verify_no_conflict(b,a,current)
         lifecycle.verify_no_conflict(b,a,current,legacy_cold_boot=True)
         for rules in [rule+'\n'+rule,'-A OUTPUT -o eth1 -j DS_DOMAINS','-A OUTPUT -o eth0 -m ndpi --proto bittorrent -j DROP']:
-            with self.assertRaises(RuntimeError):lifecycle.verify_no_conflict(b,a,{**current,'iptables':rules},legacy_cold_boot=True)
+            with self.assertRaises(RuntimeError):lifecycle.verify_no_conflict(b,a,{**current,'iptables':wrap(rules)},legacy_cold_boot=True)
         with self.assertRaises(RuntimeError):lifecycle.verify_no_conflict({**b,'baseline_kind':'fresh'},a,current,legacy_cold_boot=True)
 
     def test_partial_rollback_blocks_new_update_before_snapshot(self):

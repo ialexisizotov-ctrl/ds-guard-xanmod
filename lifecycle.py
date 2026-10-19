@@ -6,7 +6,8 @@ no global firewall restore, no forced livepatch unload and no autoremove.
 """
 import argparse,fcntl,hashlib,json,os,re,shlex,shutil,subprocess,time,uuid
 from pathlib import Path
-from transaction import CHAINS,UNITS,managed_hook,foreign_rules,detach_managed_hooks
+from transaction import CHAINS,UNITS,managed_hook,foreign_rules,detach_managed_hooks,managed_state
+from domain_rotation import GENERATION,apply_lock,prove_bank_rotation,cold_subset
 
 STATE=Path('/var/lib/ds-guard-safe/lifecycle')
 SYSCTLS=['net.netfilter.nf_conntrack_acct']
@@ -33,6 +34,11 @@ LOAD=Path('/etc/modules-load.d/xt_ndpi.conf')
 HOLD_TEXT='[Unit]\nConditionPathExists=!/var/lib/ds-guard-safe/lifecycle/disabled\n'
 
 def run(a,check=True,timeout=60):
+ # apt.conf(5): empty pkgcache/srcpkgcache disables generated cache files.
+ # Read-only queries must not race over the shared on-disk APT cache.
+ readonly_mark=len(a)>1 and a[0]=='apt-mark' and a[1] in ('showmanual','showauto','showhold','showinstall','showremove','showpurge')
+ simulation=bool(a) and a[0]=='apt-get' and any(x in a[1:] for x in ('-s','--simulate','--just-print','--dry-run','--recon','--no-act'))
+ if readonly_mark or simulation:a=[a[0],'-o','Dir::Cache::pkgcache=','-o','Dir::Cache::srcpkgcache=',*a[1:]]
  p=subprocess.run(a,capture_output=True,text=True,timeout=timeout,env={**os.environ,'DEBIAN_FRONTEND':'noninteractive','NEEDRESTART_SUSPEND':'1'})
  if check and p.returncode:raise RuntimeError('Команда не выполнена: '+a[0]+'; '+p.stderr[-800:])
  return p.stdout.strip()
@@ -112,16 +118,24 @@ def values():
  return result
 
 def snapshot():
- installed=packages();owned=package_ownership(installed);names=set(paths())
+ installed=packages();owned=package_ownership(installed);names=set()
  if (STATE/'before.json').exists():
   for pkg in set(installed)&set(owned):
    for line in run(['dpkg-query','-W','-f=${Conffiles}',pkg]).splitlines():
     fields=line.split()
     if fields and fields[0].startswith('/'):names.add(fields[0])
   if (STATE/'after.json').exists():names.update(json.loads((STATE/'after.json').read_text())['files'])
- owners={p:[Path(p).lstat().st_uid,Path(p).lstat().st_gid] for p in names if Path(p).is_file() or Path(p).is_symlink()}
- return {'files':{p:stamp(p) for p in sorted(names)},'file_owners':owners,'packages':installed,'ownership_schema':1,'owned_packages':owned,'manual':run(['apt-mark','showmanual']).splitlines(),
-  'units':units(),'values':values(),'iptables':run(['iptables-save']),'kernel':os.uname().release,
+ with apply_lock():
+  names.update(paths())
+  owners={p:[Path(p).lstat().st_uid,Path(p).lstat().st_gid] for p in names if Path(p).is_file() or Path(p).is_symlink()}
+  files={p:stamp(p) for p in sorted(names)}
+  generation=Path(GENERATION)
+  generation_text=generation.read_bytes().decode('utf-8') if files.get(GENERATION) is not None and not generation.is_symlink() else None
+  if generation_text is not None and hashlib.sha256(generation_text.encode()).hexdigest()!=files[GENERATION].get('sha256'):
+   raise RuntimeError('Файл поколения правил изменился во время чтения')
+  iptables=run(['iptables-save'])
+ return {'files':files,'file_owners':owners,'generation_text':generation_text,'packages':installed,'ownership_schema':1,'owned_packages':owned,'manual':run(['apt-mark','showmanual']).splitlines(),
+  'units':units(),'values':values(),'iptables':iptables,'kernel':os.uname().release,
   'module_state':{n:Path('/sys/module',n).exists() for n in ['xt_ndpi','tcp_bbr','nf_conntrack']},
   'loaded_module_note_hex':Path('/sys/module/xt_ndpi/notes/.note.gnu.build-id').read_bytes().hex() if Path('/sys/module/xt_ndpi/notes/.note.gnu.build-id').is_file() else None,
   'conntrack_hashsize':Path('/sys/module/nf_conntrack/parameters/hashsize').read_text().strip() if Path('/sys/module/nf_conntrack/parameters/hashsize').exists() else None,'time':time.time()}
@@ -239,7 +253,10 @@ def restore_file(name,item):
  if stamp(p)!=item:raise RuntimeError('Не удалось проверить восстановленный файл: '+name)
 
 def verify_no_conflict(b,a,actual,legacy_cold_boot=False):
- bad=conflicts(b['files'],a['files'],actual['files'])
+ rotation=prove_bank_rotation(a,actual)
+ actual_files=dict(actual['files'])
+ if rotation:actual_files[GENERATION]=a['files'][GENERATION]
+ bad=conflicts(b['files'],a['files'],actual_files)
  if bad:raise RuntimeError('После установки изменены файлы. Они не будут перезаписаны: '+', '.join(bad[:8]))
  for p in changed_owned(b,a):
   if p in a.get('file_owners',{}) and actual.get('file_owners',{}).get(p) not in (a['file_owners'][p],b.get('file_owners',{}).get(p)):
@@ -249,15 +266,11 @@ def verify_no_conflict(b,a,actual,legacy_cold_boot=False):
    raise RuntimeError('Параметр изменён после установки: '+k)
  for pkg,version in b['packages'].items():
   if a['packages'].get(pkg)!=version:raise RuntimeError('Установка изменила ранее существовавший пакет; требуется отдельный возврат: '+pkg)
- def owned_rules(text):
-  return [l for l in text.splitlines() if l.startswith('-A ') and (managed_hook(l) or shlex.split(l)[1] in CHAINS)]
- current_rules=owned_rules(actual['iptables'])
- if current_rules not in (owned_rules(a['iptables']),owned_rules(b['iptables'])):
+ current_rules=managed_state(actual['iptables'])
+ if not rotation and current_rules not in (managed_state(a['iptables']),managed_state(b['iptables'])):
   # A separately verified cold legacy resume may have lost volatile rules.
   # Only missing rules are allowed; never attribute added rules to the update.
-  expected=iter(owned_rules(a['iptables']))
-  subset=all(any(candidate==line for candidate in expected) for line in current_rules)
-  if not (legacy_cold_boot is True and b.get('baseline_kind')=='legacy-upgrade' and subset and not any('-m ndpi ' in l for l in current_rules)):
+  if not (legacy_cold_boot is True and b.get('baseline_kind')=='legacy-upgrade' and cold_subset(a['iptables'],actual['iptables'])):
    raise RuntimeError('Собственные цепочки фильтрации изменились после установки. Нужна проверка их текущего владельца.')
 
 def verify_repeat_baseline(b,a,current,legacy_cold_boot=False):
@@ -266,6 +279,7 @@ def verify_repeat_baseline(b,a,current,legacy_cold_boot=False):
  # migration can preserve a new first-touch baseline; this version refuses it.
  owned=changed_owned(b,a)
  changed=changed_owned(a,current)-owned
+ if prove_bank_rotation(a,current):changed.discard(GENERATION)
  if changed:raise RuntimeError('Между запусками изменены файлы вне области установки; требуется отдельный перенос исходного состояния: '+', '.join(sorted(changed)[:8]))
  for key in set(a['values'])|set(current['values']):
   if key not in b['values'] and key not in a['values']:continue

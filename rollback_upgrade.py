@@ -17,6 +17,7 @@ import time
 import uuid
 
 import lifecycle as lc
+import domain_rotation as rotation
 # Load this before restoring the old library: lifecycle.snapshot imports it.
 import network_tuning  # noqa: F401
 from transaction import CHAINS, UNITS, managed_hook, foreign_rules
@@ -154,10 +155,14 @@ def validate_baseline(b):
     return model
 
 
-def validate_backups(b, a):
-    for name in lc.changed_owned(b, a) | {MARKER, *HOLDS}:
+def validate_backups(b, a, extra_restore_paths=()):
+    for name in lc.changed_owned(b, a) | {MARKER, *HOLDS} | set(extra_restore_paths):
         validate_parents(name)
         item = b['files'].get(name)
+        if name in extra_restore_paths and item is not None:
+            owner = b.get('file_owners', {}).get(name)
+            if item.get('mode') != 0o600 or 'sha256' not in item or not owner or owner[0] != 0:
+                raise RuntimeError('Не подтверждены исходные права поколения доменных правил')
         if item is not None:
             validate_parents(backup(name))
             if name not in b.get('file_owners', {}) or lc.stamp(backup(name)) != item:
@@ -167,6 +172,86 @@ def validate_backups(b, a):
     for key in set(b['values']) | set(a['values']):
         if b['values'].get(key) != a['values'].get(key) and key not in b['values']:
             raise RuntimeError('Неизвестно исходное значение сетевого параметра: ' + key)
+
+
+def read_rollback_record(path, identity):
+    if path.is_symlink():
+        raise RuntimeError('Журнал отката заменён ссылкой')
+    if not path.exists():
+        return None
+    value = json.loads(path.read_text())
+    if not isinstance(value, dict) or value.get('records_sha256') != identity:
+        raise RuntimeError('Журнал незавершённого отката относится к другой установке')
+    return value
+
+
+def rotation_record(b, a, now, records):
+    """Bind a proven runtime generation to the original, unmodified journals."""
+    saved = []
+    for record in records:
+        if record is None:
+            continue
+        extra = record.get('extra_restore_paths', [])
+        observed = record.get('rotation_observed')
+        if not extra and observed is None:
+            saved.append({})
+            continue
+        if extra != [rotation.GENERATION] or not isinstance(observed, dict):
+            raise RuntimeError('Некорректная область возврата поколения доменных правил')
+        if not rotation.prove_bank_rotation(a, observed):
+            raise RuntimeError('Не подтверждено сохранённое происхождение ротации доменных правил')
+        saved.append({'extra_restore_paths': extra, 'rotation_observed': observed})
+    if saved:
+        if any(value != saved[0] for value in saved[1:]):
+            raise RuntimeError('Журналы отката расходятся в происхождении поколения правил')
+        return copy.deepcopy(saved[0])
+    generation = rotation.GENERATION
+    if (now['files'].get(generation) != a['files'].get(generation)
+            or now.get('file_owners', {}).get(generation) != a.get('file_owners', {}).get(generation)):
+        if rotation.prove_bank_rotation(a, now):
+            return {'extra_restore_paths': [generation],
+                    'rotation_observed': rotation.proof_material(now)}
+        current = (now['files'].get(generation), now.get('file_owners', {}).get(generation))
+        original = (b['files'].get(generation), b.get('file_owners', {}).get(generation))
+        if current != original:
+            raise RuntimeError('Поколение доменных правил изменено вне подтверждённой ротации')
+    return {}
+
+
+def file_comparison_view(b, a, now, record):
+    """Only a proven generation receives a temporary comparison projection.
+
+    The original b/a objects and real firewall snapshot are never rewritten.
+    Resuming a partial firewall restore does not require a new bank proof, but
+    the saved proof is revalidated and critical files remain exact b/a values.
+    """
+    result = {**now, 'iptables': a['iptables']}
+    if not record:
+        return result
+    generation = rotation.GENERATION
+    observed = record['rotation_observed']
+    for name in rotation.INPUTS:
+        if name == generation:
+            continue
+        current = (now['files'].get(name), now.get('file_owners', {}).get(name))
+        allowed = [(r['files'].get(name), r.get('file_owners', {}).get(name)) for r in (b, a)]
+        if current not in allowed:
+            raise RuntimeError('Критический файл изменился после подтверждённой ротации: ' + name)
+    current = (now['files'].get(generation), now.get('file_owners', {}).get(generation))
+    allowed = [(r['files'].get(generation), r.get('file_owners', {}).get(generation))
+               for r in (b, a, observed)]
+    if current not in allowed:
+        raise RuntimeError('Поколение доменных правил изменено вне подтверждённой ротации')
+    result['files'] = {**now['files'], generation: a['files'].get(generation)}
+    result['file_owners'] = dict(now.get('file_owners', {}))
+    if generation in a.get('file_owners', {}):
+        result['file_owners'][generation] = a['file_owners'][generation]
+    else:
+        result['file_owners'].pop(generation, None)
+    # A historical journal may not contain the optional raw generation text.
+    # No new proof is made against this synthetic, files-only comparison view.
+    result.pop('generation_text', None)
+    return result
 
 
 def package_plan(b, a, now):
@@ -251,7 +336,7 @@ def make_firewall_steps(current, baseline):
     return steps
 
 
-def firewall_journal(b, a, now, baseline):
+def firewall_journal(b, a, now, baseline, rotation_state=None):
     path = lc.STATE / 'rollback-upgrade-firewall.json'
     identity = digest([b, a])
     scope = owned_scope(firewall(now['iptables']))
@@ -267,10 +352,12 @@ def firewall_journal(b, a, now, baseline):
             raise RuntimeError('Firewall отличается от последнего подтверждённого шага отката')
         return data
     if scope not in (owned_scope(firewall(a['iptables'])), owned_scope(baseline)):
-        raise RuntimeError('Собственные правила или их положение изменились после обновления')
+        if not rotation_state or not rotation.prove_bank_rotation(a, now):
+            raise RuntimeError('Собственные правила или их положение изменились после обновления')
     return {'schema': 1, 'records_sha256': identity, 'next': 0,
             'target': owned_scope(baseline),
-            'steps': make_firewall_steps(firewall(now['iptables']), baseline)}
+            'steps': make_firewall_steps(firewall(now['iptables']), baseline),
+            **(rotation_state or {})}
 
 
 def restore_firewall(data):
@@ -337,37 +424,51 @@ def verify_files(b, names):
                 raise RuntimeError('Владелец файла после отката не совпал: ' + name)
 
 
-def _rollback_upgrade(plan=False):
+def _prepare_rollback(plan=False):
     b, a = lc.read_records()
     baseline = validate_baseline(b)
     validate_backups(b, a)
-    now = lc.snapshot()
+    preliminary = lc.snapshot()
+    # Package simulation may be slow; do not hold the domain apply lock across
+    # it. Revalidate the exact installed package set inside the final capture.
+    remove, blocked = package_plan(b, a, preliminary)
+    with lc.apply_lock():
+        now = lc.snapshot()
+        if now['packages'] != preliminary['packages']:
+            raise RuntimeError('Пакеты изменились во время подготовки отката')
+        return _prepare_locked(b, a, now, baseline, remove, blocked, plan)
+
+
+def _prepare_locked(b, a, now, baseline, remove, blocked, plan):
+    identity = digest([b, a])
+    progress_path = lc.STATE / 'rollback-upgrade-progress.json'
+    complete_path = lc.STATE / 'rollback-upgrade-completed.json'
+    progress = read_rollback_record(progress_path, identity)
+    complete = read_rollback_record(complete_path, identity)
+    recorded_firewall = read_rollback_record(lc.STATE / 'rollback-upgrade-firewall.json', identity)
+    rotation_state = rotation_record(b, a, now, [progress, complete, recorded_firewall])
+    extras = set(rotation_state.get('extra_restore_paths', []))
+    validate_backups(b, a, extras)
     # Firewall uses the stronger positional, resumable checks below.
-    lc.verify_no_conflict(b, a, {**now, 'iptables': a['iptables']})
+    lc.verify_no_conflict(b, a, file_comparison_view(b, a, now, rotation_state))
     for name in (MARKER, *HOLDS):
         if now['files'].get(name) not in (b['files'][name], a['files'].get(name)):
             raise RuntimeError('Изменён прежний запрет запуска: ' + name)
         if now['files'].get(name) is not None and now['file_owners'].get(name) not in (b['file_owners'][name], a['file_owners'].get(name)):
             raise RuntimeError('Изменён владелец прежнего запрета запуска: ' + name)
-    progress_path = lc.STATE / 'rollback-upgrade-progress.json'
-    progress = json.loads(progress_path.read_text()) if progress_path.exists() else {}
-    if progress and progress.get('records_sha256') != digest([b, a]):
-        raise RuntimeError('Журнал незавершённого отката относится к другой установке')
+    progress = progress or {}
     for u in UNITS:
         allowed = [b['units'][u], a['units'][u], {**a['units'][u], 'active': 'inactive'}]
         if progress.get('unit_restore_started') and u == 'suricata.service':
             allowed += [{**s, 'active': state} for s in (b['units'][u], a['units'][u]) for state in ('inactive', 'failed')]
         if now['units'][u] not in allowed:
             raise RuntimeError('После обновления изменено состояние службы: ' + u)
-    data = firewall_journal(b, a, now, baseline)
-    remove, blocked = package_plan(b, a, now)
+    data = firewall_journal(b, a, now, baseline, rotation_state)
     if blocked:
         print('[НУЖНА ПЕРЕЗАГРУЗКА] До отката загрузите сохранённое прежнее ядро ' + b['kernel'] + '. Сейчас используется или выбрано: ' + ', '.join(blocked))
         return 20
-    changes = lc.changed_owned(b, a)
-    complete_path = lc.STATE / 'rollback-upgrade-completed.json'
-    if complete_path.exists():
-        complete = json.loads(complete_path.read_text())
+    changes = lc.changed_owned(b, a) | extras
+    if complete is not None:
         if complete.get('records_sha256') != digest([b, a]) or remove or now['units'] != b['units']:
             raise RuntimeError('После завершённого отката состояние изменилось; повторное применение запрещено')
         verify_files(b, changes | {MARKER, *HOLDS})
@@ -381,7 +482,7 @@ def _rollback_upgrade(plan=False):
     if plan:
         print('[ПЛАН] Вернуть состояние перед обновлением с сохранением запрета старого nDPI. Пакеты к удалению: ' + (', '.join(remove) or 'нет') + '. Изменения не выполнены.')
         return 0
-    progress.update(records_sha256=digest([b, a]), started=progress.get('started', time.time()))
+    progress.update(records_sha256=identity, started=progress.get('started', time.time()), **rotation_state)
     lc.save(progress_path, progress)
     foreign_before = foreign_rules(now['iptables'])
     for name in (MARKER, *HOLDS):
@@ -390,6 +491,22 @@ def _rollback_upgrade(plan=False):
     lc.run(['systemctl', 'stop', *GUARDS])
     if any(lc.run(['systemctl', 'is-active', u], False) != 'inactive' for u in GUARDS):
         raise RuntimeError('Прежняя фильтрация не остановлена; возврат файлов запрещён')
+    # Capture -> proof -> durable old holds -> stop occurs under the same
+    # reentrant vendor apply lock. No timer can leave a half-rotated bank here.
+    return {'b': b, 'a': a, 'now': now, 'baseline': baseline, 'data': data,
+            'changes': changes, 'remove': remove, 'progress': progress,
+            'progress_path': progress_path, 'foreign_before': foreign_before,
+            'rotation_state': rotation_state}
+
+
+def _rollback_upgrade(plan=False):
+    prepared = _prepare_rollback(plan)
+    if isinstance(prepared, int):
+        return prepared
+    b, a, now, baseline, data = (prepared[k] for k in ('b', 'a', 'now', 'baseline', 'data'))
+    changes, remove, progress = (prepared[k] for k in ('changes', 'remove', 'progress'))
+    progress_path, foreign_before = prepared['progress_path'], prepared['foreign_before']
+    rotation_state = prepared['rotation_state']
     restore_firewall(data)
     ordinary = sorted(n for n in changes if not n.startswith(LIBRARIES))
     libraries = sorted(n for n in changes if n.startswith(LIBRARIES))
@@ -442,7 +559,7 @@ def _rollback_upgrade(plan=False):
         'schema': 1, 'records_sha256': digest([b, a]), 'completed_at': time.time(),
         'pre_upgrade_files_restored': True, 'original_vendor_installation_removed': False,
         'legacy_hold_restored': True, 'packages_removed': remove,
-        'loaded_module_requires_reboot': reboot})
+        'loaded_module_requires_reboot': reboot, **rotation_state})
     print('[ОБНОВЛЕНИЕ ОТМЕНЕНО] Восстановлено подтверждённое состояние перед обновлением. Прежние пакеты сохранены; старый nDPI остаётся под запретом. Журнал и резервные копии сохранены.')
     if reboot:
         print('[НУЖНА ПЕРЕЗАГРУЗКА] Загруженное ядро или модуль отличаются от исходного состояния. Нужна отдельная плановая перезагрузка; принудительной выгрузки не было.')

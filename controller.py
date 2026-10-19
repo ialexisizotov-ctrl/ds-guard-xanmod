@@ -4,6 +4,7 @@ from pathlib import Path
 import preflight
 from module_identity import loaded_matches
 from transaction import BASE, begin, run, save, rollback, foreign_rules
+from domain_rotation import apply_lock
 
 ROOT=Path('/usr/local/lib/ds-guard-safe')
 STATE=Path('/var/lib/ds-guard-safe')
@@ -66,7 +67,8 @@ def execute(health_command=None):
             previous=Path(json.loads((STATE/'current.json').read_text())['transaction'])
             if not (previous/'committed').exists() and not (previous/'rolled-back').exists():
                 raise RuntimeError('An unfinished transaction requires ds-guard-safe-recover.service before retry')
-        txn=BASE/str(uuid.uuid4());before=begin(txn)
+        txn=BASE/str(uuid.uuid4())
+        with apply_lock():before=begin(txn)
         save(STATE/'current.json',{'transaction':str(txn)})
         shutil.copy2(ROOT/'transaction.py',txn/'transaction.py')
         safety='ds-guard-safe-rollback-'+txn.name

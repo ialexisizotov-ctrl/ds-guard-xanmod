@@ -58,7 +58,7 @@ def package_specs(m):
  return m.get('packages') or [{'filename':m[k],'sha256':m[k+'_sha256'],'url':ASSET_BASE+m[k]} for k in ['image','headers']]
 
 def result_message(rc,kind):
- if rc==0:return '[ГОТОВО] '+{'guard':'Модуль и три слоя ds-guard проверены.','kernel':'Пакеты ядра подготовлены.','tune':'Сетевые параметры применены и проверены.','disable':'Фильтрация отключена.','remove':'Удаление завершено.'}[kind]
+ if rc==0:return '[ШАГ ПРОВЕРЕН] '+{'guard':'Модуль и три слоя ds-guard проверены.','kernel':'Пакеты ядра подготовлены.','tune':'Сетевые параметры применены и проверены.','disable':'Фильтрация отключена.','remove':'Удаление завершено.'}[kind]
  if rc==20:return '[НУЖНА ПЕРЕЗАГРУЗКА] Новый модуль подготовлен, но ещё не загружен. Выполните отдельную плановую перезагрузку и повторите установку.'
  if rc==75:return '[ЗАНЯТО] Уже выполняется установка или восстановление. Дождитесь её завершения.'
  if rc==78:return '[ОСТАНОВЛЕНО] Система не прошла проверку совместимости или безопасности. Подробности записаны в журнал.'
@@ -201,32 +201,43 @@ def main(argv=None):
  with Path('/run/ds-guard-safe-lifecycle.lock').open('w') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
   if a.mode in ('full','guard'):lifecycle.enable_prepare()
-  lifecycle.begin(legacy_upgrade=bool(legacy),legacy_cold_boot=bool(legacy and legacy.get('resumed')));rc=1
-  try:
-   rc=perform(a,info,catalog,kernel,log);return rc
-  finally:lifecycle.seal(rc)
+  lifecycle.begin(legacy_upgrade=bool(legacy),legacy_cold_boot=bool(legacy and legacy.get('resumed')))
+  return perform_and_seal(a,info,catalog,kernel,log)
+
+def perform_and_seal(a,info,catalog,kernel,log):
+ import lifecycle
+ rc=1
+ try:
+  rc=perform(a,info,catalog,kernel,log)
+ finally:
+  try:lifecycle.seal(rc)
+  except Exception:
+   print('[ЖУРНАЛ НЕ ЗАВЕРШЁН] Не удалось завершить журнал установки. Рабочие шаги могли выполниться; общий успех не подтверждён. Проверьте незавершённый журнал перед повтором.',file=sys.stderr,flush=True)
+   raise
+ if rc==0:
+  print('[ГОТОВО] Все выбранные шаги завершены, итоговый журнал сохранён. Перезагрузка не выполнялась.',flush=True)
+  if not a.health_command:print('[НЕ ПРОВЕРЕНО] Для полной приёмки дополнительно проверьте реальный клиентский VPN-путь.',flush=True)
+ return rc
 
 def perform(a,info,catalog,kernel,log):
  if a.mode in ('kernel','full') and kernel!=info['kernel']:
   if a.mode=='kernel' and Path('/etc/modules-load.d/xt_ndpi.conf').exists():raise Refusal('Уже установлен ds-guard. Для смены ядра выберите полный режим, чтобы подготовить совместимый модуль.')
   directory=download_kernel(kernel,catalog[kernel],log)
   args=['bash',str(ROOT/'kernel-stage.sh')]+(['--kernel-only'] if a.mode=='kernel' else [])+[kernel,str(directory)]
-  rc=run_step(args,'Подготовка проверенного ядра рядом с прежним',log);print(result_message(rc,'kernel'))
+  rc=run_step(args,'Подготовка проверенного ядра рядом с прежним',log);print(result_message(rc,'kernel'),flush=True)
   if rc:return rc
   print('[ПОДГОТОВЛЕНО] Новое ядро ещё не запущено. Сохранён прежний выбор загрузки. Нужны отдельная проверка GRUB, плановая загрузка выбранного ядра и повторный запуск установщика.');return 20
  if a.mode=='kernel':print('[ЗАПУЩЕНО] Выбранное проверенное ядро уже работает.');return 0
  if a.mode in ('full','guard'):
   args=['bash',str(ROOT/'install.sh')]+(['--health-command',a.health_command] if a.health_command else [])
-  rc=run_step(args,'Установка и проверка ds-guard',log);print(result_message(rc,'guard'))
+  rc=run_step(args,'Установка и проверка ds-guard',log);print(result_message(rc,'guard'),flush=True)
   if rc:return rc
  if a.mode=='tune' or a.mode=='full' and a.tuning=='vpn':
   args=[sys.executable,str(ROOT/'network_tuning.py')]+(['--health-command',a.health_command] if a.health_command else [])
-  rc=run_step(args,'Настройка сети с сохранением прежних значений',log);print(result_message(rc,'tune'))
+  rc=run_step(args,'Настройка сети с сохранением прежних значений',log);print(result_message(rc,'tune'),flush=True)
   if rc:
    if a.mode=='full':print('[ЧАСТИЧНО] ds-guard установлен, но настройка сети не принята. Результат её восстановления смотрите в журнале.')
    return rc
- print('[ГОТОВО] Все выбранные шаги завершены. Перезагрузка не выполнялась.')
- if not a.health_command:print('[НЕ ПРОВЕРЕНО] Для полной приёмки дополнительно проверьте реальный клиентский VPN-путь.')
  return 0
 
 if __name__=='__main__':

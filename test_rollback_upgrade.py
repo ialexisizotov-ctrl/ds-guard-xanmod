@@ -1,6 +1,6 @@
 """Local mock-only regression tests; never run a host rollback."""
 import copy
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 import hashlib
 import json
 import os
@@ -80,10 +80,13 @@ class UpgradeRollback(unittest.TestCase):
         self.model['OUTPUT'].append(['-p', 'tcp', '--dport', '444', '-j', 'ACCEPT'])
         self.now['packages']['admin-package'] = '9'
         self.commands, self.restores = [], []
+        self.lock_depth = 0
+        self.lock_events = []
         self.interrupt_after_iptables = False
         self.simulation = 'Purg new-package [1]'
         self.stack.enter_context(patch.object(lc, 'read_records', side_effect=lambda: (copy.deepcopy(self.b), copy.deepcopy(self.a))))
         self.stack.enter_context(patch.object(lc, 'snapshot', side_effect=self.snapshot))
+        self.stack.enter_context(patch.object(lc, 'apply_lock', side_effect=self.apply_lock))
         self.stack.enter_context(patch.object(lc, 'packages', side_effect=lambda: dict(self.now['packages'])))
         self.stack.enter_context(patch.object(lc, 'units', side_effect=lambda: copy.deepcopy(self.now['units'])))
         self.stack.enter_context(patch.object(lc, 'run', side_effect=self.command))
@@ -92,9 +95,18 @@ class UpgradeRollback(unittest.TestCase):
         self.reboot = self.stack.enter_context(patch.object(ru, 'runtime_reboot_needed', return_value=False))
 
     def snapshot(self):
+        self.lock_events.append(('snapshot', self.lock_depth))
         d = copy.deepcopy(self.now)
         d['iptables'] = text_of(self.model)
         return d
+
+    @contextmanager
+    def apply_lock(self):
+        self.lock_depth += 1
+        try:
+            yield
+        finally:
+            self.lock_depth -= 1
 
     def restore(self, name, item, baseline):
         self.restores.append(name)
@@ -103,6 +115,8 @@ class UpgradeRollback(unittest.TestCase):
             self.now['file_owners'].pop(name, None)
         else:
             self.now['file_owners'][name] = baseline['file_owners'][name]
+        if name == ru.rotation.GENERATION:
+            self.now['generation_text'] = ru.backup(name).read_text() if item else None
 
     def verify(self, b, names):
         for n in names:
@@ -111,6 +125,7 @@ class UpgradeRollback(unittest.TestCase):
 
     def command(self, args, check=True, timeout=60):
         self.commands.append(args)
+        self.lock_events.append((tuple(args), self.lock_depth))
         if args == ['iptables-save']:
             return text_of(self.model)
         if args[:3] == ['iptables', '-w', '5']:
@@ -328,6 +343,193 @@ class UpgradeRollback(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'положение'):
             ru._rollback_upgrade()
         self.assertEqual(self.restores, [])
+
+    def configure_rotation(self):
+        """The legacy and sealed generation are equal; only the timer flips it."""
+        generation = ru.rotation.GENERATION
+        text = 'ACTIVE=DS_DOM_A\nDNS_RULES=1\nHOST_RULES=1\nPOLICY_SHA=' + 'a' * 64 + '\n'
+        for name in (*ru.rotation.INPUTS, generation):
+            content = text if name == generation else name
+            p = ru.backup(name)
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(content)
+            p.chmod(0o600 if name == generation else 0o644)
+            for record in (self.b, self.a, self.now):
+                record['files'][name] = lc.stamp(p)
+                record['file_owners'][name] = [0, 0]
+        model = {
+            'INPUT': [['-p', 'tcp', '--dport', '22', '-j', 'ACCEPT']],
+            'OUTPUT': [['-o', 'eth0', '-j', 'DS_DOMAINS'], ['-d', '192.0.2.1/32', '-j', 'ACCEPT']],
+            'FORWARD': [['-o', 'eth0', '-j', 'DS_DOMAINS']],
+            'DS_DOMAINS': [['-j', 'DS_DOM_A']],
+            'DS_DOM_A': [['-p', 'udp', '--dport', '53', '-j', 'DS_DOM_A_D'],
+                         ['-p', 'tcp', '--dport', '443', '-j', 'DS_DOM_A_W']],
+            'DS_DOM_A_D': [['-m', 'string', '--string', 'example.test', '--algo', 'kmp', '-j', 'DROP']],
+            'DS_DOM_A_W': [['-m', 'connbytes', '--connbytes', '33:', '--connbytes-mode', 'packets', '--connbytes-dir', 'original', '-j', 'RETURN']]}
+        self.b['iptables'] = text_of(model)
+        model['DS_DOM_A_W'].append(['-m', 'ndpi', '--proto', 'all', '--host', 'example.test', '-j', 'DROP'])
+        self.a['iptables'] = text_of(model)
+        self.model = ru.firewall(self.a['iptables'].replace('DS_DOM_A', 'DS_DOM_B'))
+        rotated = text.replace('DS_DOM_A', 'DS_DOM_B')
+        self.now['generation_text'] = rotated
+        self.now['files'][generation] = {'sha256': hashlib.sha256(rotated.encode()).hexdigest(), 'mode': 0o600}
+        self.assertNotIn(generation, lc.changed_owned(self.b, self.a))
+        # Old persisted lifecycle records predate raw generation_text capture.
+        self.assertNotIn('generation_text', self.a)
+        self.assertTrue(ru.rotation.prove_bank_rotation(self.a, self.snapshot()))
+
+    def test_rotation_restores_equal_before_after_generation_and_original_identity(self):
+        self.configure_rotation()
+        original = copy.deepcopy([self.b, self.a])
+        foreign = ru.foreign_rules(text_of(self.model))
+        self.assertEqual(ru._rollback_upgrade(), 0)
+        generation = ru.rotation.GENERATION
+        self.assertIn(generation, self.restores)
+        self.assertEqual(self.now['files'][generation], self.b['files'][generation])
+        self.assertEqual(ru.foreign_rules(text_of(self.model)), foreign)
+        self.assertEqual([self.b, self.a], original)
+        for name in ('progress', 'firewall', 'completed'):
+            receipt = json.loads((self.state / ('rollback-upgrade-' + name + '.json')).read_text())
+            self.assertEqual(receipt['records_sha256'], ru.digest(original))
+            self.assertEqual(receipt['extra_restore_paths'], [generation])
+            self.assertTrue(ru.rotation.prove_bank_rotation(self.a, receipt['rotation_observed']))
+        self.commands.clear()
+        self.restores.clear()
+        self.assertEqual(ru._rollback_upgrade(), 0)
+        self.assertFalse(self.restores)
+        self.assertFalse(any(c[0] in ('systemctl', 'iptables') or c[:2] == ['apt-get', '-y'] for c in self.commands))
+
+    def test_rotation_missing_original_generation_backup_refuses_before_mutation(self):
+        self.configure_rotation()
+        ru.backup(ru.rotation.GENERATION).write_text('not the original')
+        with self.assertRaisesRegex(RuntimeError, 'резервной копии'):
+            ru._rollback_upgrade()
+        self.assertEqual(self.restores, [])
+        self.assertFalse(list(self.state.glob('rollback-upgrade*')))
+
+    def test_rotation_interrupt_after_exact_firewall_step_resumes(self):
+        self.configure_rotation()
+        self.interrupt_after_iptables = True
+        with self.assertRaises(KeyboardInterrupt):
+            ru._rollback_upgrade()
+        receipt = json.loads((self.state / 'rollback-upgrade-firewall.json').read_text())
+        self.assertEqual(receipt['next'], 0)
+        self.assertEqual(ru.owned_scope(self.model), receipt['steps'][0]['after'])
+        self.assertEqual(ru._rollback_upgrade(), 0)
+        self.assertEqual(ru.owned_scope(self.model), ru.owned_scope(ru.firewall(self.b['iptables'])))
+        self.assertEqual(self.now['files'][ru.rotation.GENERATION], self.b['files'][ru.rotation.GENERATION])
+
+    def test_rotation_interrupt_after_generation_restore_resumes_from_saved_proof(self):
+        self.configure_rotation()
+        armed = [True]
+
+        def restore_then_interrupt(name, item, baseline):
+            self.restore(name, item, baseline)
+            if name == ru.rotation.GENERATION and armed[0]:
+                armed[0] = False
+                raise KeyboardInterrupt()
+
+        with patch.object(ru, 'restore_file', side_effect=restore_then_interrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                ru._rollback_upgrade()
+        self.assertFalse(ru.rotation.prove_bank_rotation(self.a, self.snapshot()))
+        self.assertEqual(ru._rollback_upgrade(), 0)
+        self.assertEqual(self.now['files'][ru.rotation.GENERATION], self.b['files'][ru.rotation.GENERATION])
+
+    def test_rotation_saved_firewall_resume_does_not_accept_another_equivalent_bank(self):
+        self.configure_rotation()
+        self.interrupt_after_iptables = True
+        with self.assertRaises(KeyboardInterrupt):
+            ru._rollback_upgrade()
+        # A whole bank is equivalent policy, but is neither exact interrupted
+        # step precondition nor postcondition; no normalization on resume.
+        self.model = ru.firewall(self.a['iptables'])
+        self.restores.clear()
+        with self.assertRaisesRegex(RuntimeError, 'последнего подтверждённого шага'):
+            ru._rollback_upgrade()
+        self.assertEqual(self.restores, [])
+
+    def test_rotation_completed_repeat_refuses_rotated_generation_reintroduced(self):
+        self.configure_rotation()
+        observed = copy.deepcopy(self.now['files'][ru.rotation.GENERATION])
+        ru._rollback_upgrade()
+        self.now['files'][ru.rotation.GENERATION] = observed
+        self.restores.clear()
+        with self.assertRaisesRegex(RuntimeError, 'Файл не восстановлен'):
+            ru._rollback_upgrade(plan=True)
+        self.assertEqual(self.restores, [])
+
+    def test_rotation_critical_input_changed_after_interruption_is_not_adopted(self):
+        self.configure_rotation()
+        self.interrupt_after_iptables = True
+        with self.assertRaises(KeyboardInterrupt):
+            ru._rollback_upgrade()
+        self.now['files'][ru.rotation.INPUTS[0]] = {'sha256': 'administrator-edit', 'mode': 0o644}
+        self.restores.clear()
+        with self.assertRaisesRegex(RuntimeError, 'Критический файл'):
+            ru._rollback_upgrade()
+        self.assertEqual(self.restores, [])
+
+    def test_rotation_changed_generation_owner_is_refused(self):
+        self.configure_rotation()
+        self.now['file_owners'][ru.rotation.GENERATION] = [1000, 0]
+        with self.assertRaisesRegex(RuntimeError, 'вне подтверждённой ротации'):
+            ru._rollback_upgrade()
+        self.assertEqual(self.restores, [])
+
+    def test_rotation_saved_proof_tampering_refuses_before_mutation(self):
+        self.configure_rotation()
+        self.interrupt_after_iptables = True
+        with self.assertRaises(KeyboardInterrupt):
+            ru._rollback_upgrade()
+        path = self.state / 'rollback-upgrade-progress.json'
+        receipt = json.loads(path.read_text())
+        receipt['rotation_observed']['generation_text'] += 'UNKNOWN=yes\n'
+        path.write_text(json.dumps(receipt))
+        self.restores.clear()
+        with self.assertRaisesRegex(RuntimeError, 'сохранённое происхождение'):
+            ru._rollback_upgrade()
+        self.assertEqual(self.restores, [])
+
+    def test_rotation_extra_path_and_original_journal_identity_are_not_widened(self):
+        self.configure_rotation()
+        self.interrupt_after_iptables = True
+        with self.assertRaises(KeyboardInterrupt):
+            ru._rollback_upgrade()
+        path = self.state / 'rollback-upgrade-progress.json'
+        original = json.loads(path.read_text())
+        for field, value, message in (
+                ('extra_restore_paths', [ru.rotation.GENERATION, '/etc/foreign'], 'область возврата'),
+                ('records_sha256', 'other-installation', 'другой установке')):
+            with self.subTest(field=field):
+                receipt = {**original, field: value}
+                path.write_text(json.dumps(receipt))
+                self.restores.clear()
+                with self.assertRaisesRegex(RuntimeError, message):
+                    ru._rollback_upgrade()
+                self.assertEqual(self.restores, [])
+
+    def test_rotation_foreign_hook_position_drift_is_not_normalized(self):
+        self.configure_rotation()
+        self.model['OUTPUT'].insert(0, ['-p', 'tcp', '--dport', '123', '-j', 'DROP'])
+        with self.assertRaisesRegex(RuntimeError, 'вне подтверждённой ротации'):
+            ru._rollback_upgrade()
+        self.assertEqual(self.restores, [])
+
+    def test_rotation_capture_to_stop_is_locked_without_long_restore_under_lock(self):
+        self.configure_rotation()
+        self.lock_events.clear()
+        self.assertEqual(ru._rollback_upgrade(), 0)
+        snapshots = [depth for event, depth in self.lock_events if event == 'snapshot']
+        self.assertEqual(snapshots, [0, 1])
+        stop = ('systemctl', 'stop', *ru.GUARDS)
+        self.assertIn((stop, 1), self.lock_events)
+        reloads = [depth for event, depth in self.lock_events if event == ('systemctl', 'daemon-reload')]
+        self.assertEqual(reloads, [1, 0])
+        for event, depth in self.lock_events:
+            if isinstance(event, tuple) and (event[0] == 'iptables' or event[:2] in (('apt-get', '-s'), ('apt-get', '-y'))):
+                self.assertEqual(depth, 0, event)
+        self.assertEqual(self.lock_depth, 0)
 
 
 class AtomicRestore(unittest.TestCase):
