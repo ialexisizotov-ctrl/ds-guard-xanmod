@@ -1,7 +1,8 @@
-# Validation of the development snapshot
+# Validation of v1.7.11-dsg1
 
-No production release is published yet. `bootstrap.sh` intentionally refuses
-installation until its release archive digest is pinned after acceptance.
+The installer archive is pinned by SHA-256 in the release bootstrap.
+Acceptance was performed sequentially on five production machines.
+Production addresses, credentials and configurations are excluded from this repository.
 
 The isolated Ubuntu 24.04 test VM booted
 `7.0.12-x64v2-dsg1-xanmod1`. The exact module build ID matched the loaded module;
@@ -41,15 +42,24 @@ service reconciler removed two obsolete draining rules; six kernel-generated
 IPv6 link-local routes appeared. A Docker null/empty-DNS serialization change
 required a narrow reconciler compatibility fix. Its unrelated private-service
 topology warning remains outside filtering acceptance.
-The remaining servers are being handled sequentially. This is still a
-development snapshot, not a completed fleet or release acceptance.
+Two additional production machines on the custom XanMod 7.2 kernel passed
+five actual VPN checks before and five after installation, all three filtering
+layers, strict public-site TLS, exact unrelated firewall rules, configuration
+hashes and container identities. On each, the kernel-generated link-local
+address of the recreated virtual ifb0 interface changed with its MAC; other
+routes and traffic-shaping parameters were preserved. No new kernel fault or
+failed service was observed in their bounded acceptance windows.
+The Ubuntu 22.04 machine took approximately six minutes to return over SSH
+after reboot; the precise cause of the delay was not established. Its existing
+RAID-monitor failure and the second XanMod 7.0 machine's pre-existing network
+wait-online failure are not represented as repaired by this installer.
 
 Offline checks: 11 compatibility/preservation/listener tests, 768 actual
 hostname-formatter cases under ASan/UBSan, and 16,640 legacy bounded-copy cases
 under ASan/UBSan. Exact pinned-source patch application, repeat application and
 refusal of unexpected source changes were also checked.
 
-`kernel-stage.sh` is an experimental, separately tested preparation step. It
+`kernel-stage.sh` is a separately tested preparation step. It
 stages image, headers and an exact module alongside existing kernels, with
 bounded CPU/RAM/time, checksum checks and temporary kernel-hook suppression.
 Reviewed Linux crypto/netfilter module renames are resolved against the target
