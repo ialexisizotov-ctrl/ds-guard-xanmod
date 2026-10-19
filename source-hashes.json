@@ -9,7 +9,7 @@
   },
   "ndpi-netfilter/src/main.c": {
     "original": "a402513dcf6120e565817575fc49d79c50fb55309ff5e92f620533fc2538ac07",
-    "patched": "7cb115c3ce07d293819f240eb37780566c4b0c350d6f136bc7a9019c25c5ed42"
+    "patched": "2e8b89b36bc8e6000f5df756a41dfa02e606f554cd61b65ec76d5a7a5c30a0f0"
   },
   "ndpi-netfilter/src/ndpi_proc_parsers.h": {
     "original": "d6955e82bb48a768cc69b4babe7978657eae8f5019c1e4f1c7fefc00847429fc",

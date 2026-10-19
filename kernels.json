@@ -5,7 +5,11 @@
     "image_sha256": "d79f3f82b259062d57efe8cd511d37f200a78b887a271b7c99c7f1a1a4755f2e",
     "headers": "linux-headers-7.0.12-x64v2-dsg1-xanmod1_7.0.12-dsg1_amd64.deb",
     "headers_sha256": "c4bebf8fe96d8ae11ebee2b06090187df17d60a834b93754c7866288dd3b875b",
-    "cpu_level": "x86-64-v2"
+    "cpu_level": "x86-64-v2",
+    "unsupported_loaded_modules": [
+      "vga16fb",
+      "vgastate"
+    ]
   },
   "7.2.9-x64v3-dsg1-xanmod1": {
     "source_commit": "bca689d38274338b44a54e3bb198547c8eab8fc0",
@@ -13,6 +17,118 @@
     "image_sha256": "911d46b8f14e0f56bac92aac817e30bd73060386cdb8183398e8812dcb09270b",
     "headers": "linux-headers-7.2.9-x64v3-dsg1-xanmod1_7.2.9-dsg1_amd64.deb",
     "headers_sha256": "5cdd86049dd81f4f9973d13f4ab9d4f2de6d1da5065f4cb7c17bc9104bad2ff8",
-    "cpu_level": "x86-64-v3"
+    "cpu_level": "x86-64-v3",
+    "unsupported_loaded_modules": [
+      "vga16fb",
+      "vgastate"
+    ]
+  },
+  "6.8.0-87-generic": {
+    "kind": "ubuntu",
+    "os_version": "22.04",
+    "cpu_level": "x86-64",
+    "repository_date": "2026-10-18T23:58:43+00:00",
+    "index_sha256": "9d09ef662325b89b2dfe6066b5d6c256bcb68a779cf035b2685625f96f8742df",
+    "packages": [
+      {
+        "package": "linux-headers-6.8.0-87-generic",
+        "version": "6.8.0-87.88~22.04.1",
+        "architecture": "amd64",
+        "filename": "linux-headers-6.8.0-87-generic_6.8.0-87.88~22.04.1_amd64.deb",
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/l/linux-hwe-6.8/linux-headers-6.8.0-87-generic_6.8.0-87.88~22.04.1_amd64.deb",
+        "sha256": "75cba0e9b23680bf2ce7841ad353dd9c754a682f7a4cc60161d9a7364ae2ea4a",
+        "size": 3630218
+      },
+      {
+        "package": "linux-hwe-6.8-headers-6.8.0-87",
+        "version": "6.8.0-87.88~22.04.1",
+        "architecture": "all",
+        "filename": "linux-hwe-6.8-headers-6.8.0-87_6.8.0-87.88~22.04.1_all.deb",
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/l/linux-hwe-6.8/linux-hwe-6.8-headers-6.8.0-87_6.8.0-87.88~22.04.1_all.deb",
+        "sha256": "9ff30c39b2b7a4960f6bc29dbae245e4a101c84af7ad9aea549aa0a2235f1d27",
+        "size": 13507472
+      },
+      {
+        "package": "linux-image-6.8.0-87-generic",
+        "version": "6.8.0-87.88~22.04.1",
+        "architecture": "amd64",
+        "filename": "linux-image-6.8.0-87-generic_6.8.0-87.88~22.04.1_amd64.deb",
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/l/linux-signed-hwe-6.8/linux-image-6.8.0-87-generic_6.8.0-87.88~22.04.1_amd64.deb",
+        "sha256": "748cb8bfd1c533a0b6c529f2e5ab02db00615bf6f78e40b6c1f3ab66caabfd85",
+        "size": 14733656
+      },
+      {
+        "package": "linux-modules-6.8.0-87-generic",
+        "version": "6.8.0-87.88~22.04.1",
+        "architecture": "amd64",
+        "filename": "linux-modules-6.8.0-87-generic_6.8.0-87.88~22.04.1_amd64.deb",
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/l/linux-hwe-6.8/linux-modules-6.8.0-87-generic_6.8.0-87.88~22.04.1_amd64.deb",
+        "sha256": "03383c05146a815f1bb35b0ad445f3901b43443eb1d12cf58b5bff699e737cc3",
+        "size": 26262498
+      },
+      {
+        "package": "linux-modules-extra-6.8.0-87-generic",
+        "version": "6.8.0-87.88~22.04.1",
+        "architecture": "amd64",
+        "filename": "linux-modules-extra-6.8.0-87-generic_6.8.0-87.88~22.04.1_amd64.deb",
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/l/linux-hwe-6.8/linux-modules-extra-6.8.0-87-generic_6.8.0-87.88~22.04.1_amd64.deb",
+        "sha256": "51c7c2df6e03c55c538722911febe0beb1e20784c3287800bb09278cd8e7c62d",
+        "size": 79443892
+      }
+    ]
+  },
+  "6.8.0-147-generic": {
+    "kind": "ubuntu",
+    "os_version": "24.04",
+    "cpu_level": "x86-64",
+    "repository_date": "2026-10-18T23:55:07+00:00",
+    "index_sha256": "1b79de5bbdc9bfffde72130dac32d60ce0a3c12d1c9d4295d9bf840462028c86",
+    "packages": [
+      {
+        "package": "linux-headers-6.8.0-147",
+        "version": "6.8.0-147.147",
+        "architecture": "all",
+        "filename": "linux-headers-6.8.0-147_6.8.0-147.147_all.deb",
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/l/linux/linux-headers-6.8.0-147_6.8.0-147.147_all.deb",
+        "sha256": "16c59831600aa76bbf2ce56000a7874a5c7b52f9507ae3deb0e633f1d71078bf",
+        "size": 13677052
+      },
+      {
+        "package": "linux-headers-6.8.0-147-generic",
+        "version": "6.8.0-147.147",
+        "architecture": "amd64",
+        "filename": "linux-headers-6.8.0-147-generic_6.8.0-147.147_amd64.deb",
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/l/linux/linux-headers-6.8.0-147-generic_6.8.0-147.147_amd64.deb",
+        "sha256": "8acc8adee7f81b66adc95dfad5989c03a154bcc20dd91e52efd7f1e63db82109",
+        "size": 3893810
+      },
+      {
+        "package": "linux-image-6.8.0-147-generic",
+        "version": "6.8.0-147.147",
+        "architecture": "amd64",
+        "filename": "linux-image-6.8.0-147-generic_6.8.0-147.147_amd64.deb",
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/l/linux-signed/linux-image-6.8.0-147-generic_6.8.0-147.147_amd64.deb",
+        "sha256": "08432502e565a8a3b4ab13bd8b01788a0a83c9398c8a1e9350f1225991bc4fbb",
+        "size": 14845068
+      },
+      {
+        "package": "linux-modules-6.8.0-147-generic",
+        "version": "6.8.0-147.147",
+        "architecture": "amd64",
+        "filename": "linux-modules-6.8.0-147-generic_6.8.0-147.147_amd64.deb",
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/l/linux/linux-modules-6.8.0-147-generic_6.8.0-147.147_amd64.deb",
+        "sha256": "3b9188304d600fc35a4f4d1f99751f7ea485bb7f9e0cb87831d4ebf2d3423d9d",
+        "size": 39250112
+      },
+      {
+        "package": "linux-modules-extra-6.8.0-147-generic",
+        "version": "6.8.0-147.147",
+        "architecture": "amd64",
+        "filename": "linux-modules-extra-6.8.0-147-generic_6.8.0-147.147_amd64.deb",
+        "url": "https://archive.ubuntu.com/ubuntu/pool/main/l/linux/linux-modules-extra-6.8.0-147-generic_6.8.0-147.147_amd64.deb",
+        "sha256": "b3f16d16b54796497884b27810b0942243bdc6ef26da1ce821e948ece39a9492",
+        "size": 113500352
+      }
+    ]
   }
 }

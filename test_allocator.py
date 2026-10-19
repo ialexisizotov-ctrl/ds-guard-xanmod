@@ -58,9 +58,9 @@ def main():
     #define xa_mk_value(n) ((void *)(((uintptr_t)(n)<<1)|1))
     #define xa_is_value(n) (((uintptr_t)(n)&1)!=0)
     #define xa_to_value(n) ((uintptr_t)(n)>>1)
-    #define IS_ERR(n) ((uintptr_t)(n)>=(uintptr_t)-4095)
+    #define xa_is_err(n) ((((uintptr_t)(n)&3)==2)&&((uintptr_t)(n)>=(uintptr_t)-4094))
     static void *xa_store(struct xarray *x,unsigned long k,void *v,int flags){
-     (void)flags;if(fail_metadata){fail_metadata--;return (void *)-ENOMEM;}
+     (void)flags;if(fail_metadata){fail_metadata--;return (void *)(((uintptr_t)-ENOMEM<<2)|2);}
      for(int i=0;i<4096;i++)if(x->a[i].key==k){void *old=x->a[i].value;x->a[i].value=v;return old;}
      for(int i=0;i<4096;i++)if(!x->a[i].key){x->a[i]=(struct xa_entry){k,v};return NULL;}abort();
     }

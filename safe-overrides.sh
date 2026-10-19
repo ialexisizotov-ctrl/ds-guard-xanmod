@@ -19,6 +19,11 @@ ndpi_plugin_fits(){
 ensure_repos(){ :; } # Never rewrite the server's repository configuration.
 install_header_meta(){ :; } # Never pull a new kernel indirectly.
 apt_install(){
+  local package all_present=1
+  for package in "$@"; do
+    [ "$(dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null)" = installed ] || all_present=0
+  done
+  [ "$all_present" = 0 ] || return 0
   if [ "${DS_APT_UPDATED:-0}" != 1 ]; then
     timeout 300 apt-get $APT_NET_OPTS -o DPkg::Lock::Timeout=120 update >>"$LOG" 2>&1 || return 1
     DS_APT_UPDATED=1

@@ -4,6 +4,8 @@ umask 077
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 sha256sum --strict --check SHA256SUMS >/dev/null
 test "$(id -u)" = 0
+opts=()
+if [ "${1:-}" = --kernel-only ]; then opts+=(--kernel-only); shift; fi
 test "$#" = 2
 kernel=$1
 directory=$(realpath -- "$2")
@@ -39,5 +41,5 @@ systemd-run --unit=ds-guard-safe-kernel-stage --wait --collect \
  --property=IOWeight=10 --property=MemoryMax=2G --property=MemorySwapMax=0 \
  --property=OOMPolicy=stop --property=TimeoutStartSec=1100 \
  --property=OnFailure=ds-guard-safe-kernel-cleanup.service \
- /usr/bin/python3 /usr/local/lib/ds-guard-safe-kernel/kernel-stage.py "$kernel" "$directory"
+ /usr/bin/python3 /usr/local/lib/ds-guard-safe-kernel/kernel-stage.py "${opts[@]}" "$kernel" "$directory"
 echo 'Kernel staged alongside existing kernels. Boot selection and running services retained.'
