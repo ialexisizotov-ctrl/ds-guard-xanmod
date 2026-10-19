@@ -1,5 +1,11 @@
 # Validation of v1.7.11-dsg1
 
+**WITHDRAWN.** Extended production observation found KFENCE out-of-bounds reads
+in the upstream nDPI realloc_wrapper on TLS buffer growth. Initial short tests
+below passed but did not expose the defect. The installer archive is unavailable
+under its original name; do not use this release. A corrected allocator and
+extended runtime acceptance are required.
+
 The installer archive is pinned by SHA-256 in the release bootstrap.
 Acceptance was performed sequentially on five production machines.
 Production addresses, credentials and configurations are excluded from this repository.

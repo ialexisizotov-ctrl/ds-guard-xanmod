@@ -2,8 +2,8 @@
 # A release builder replaces these two literals after all acceptance gates.
 set -euo pipefail
 umask 077
-release='v1.7.11-dsg1'
-expected='0245ad678494ea011a1fb92313982bbb6eb92905e6c50bf0cf8c52a9c5aebd85'
+release='WITHDRAWN'
+expected='UNRELEASED'
 [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || { echo 'No accepted release is pinned in this development snapshot'; exit 78; }
 [ "$(id -u)" = 0 ] || { echo 'Run as root'; exit 77; }
 work=$(mktemp -d /var/tmp/ds-guard-download.XXXXXXXX)
