@@ -26,6 +26,14 @@ def assess(kernel, config, os_id, arch, container, lockdown, free, available):
     if available < 1536 * 1024**2: errors.append('At least 1536 MiB available RAM is required')
     return errors
 
+def kernel_diagnostic_errors(returncode, log):
+    if returncode:
+        return ['Cannot read kernel diagnostics for the current boot']
+    if re.search(r'BUG:|UBSAN:|Oops:|Kernel panic|WARNING: CPU|Out of memory|Killed process', log):
+        return ['Current boot has kernel faults; review and recover before activation']
+    return []
+
+
 def collect():
     kernel = platform.release()
     cfg = Path('/boot/config-' + kernel)
@@ -51,6 +59,8 @@ def collect():
         for unit in line.partition('=')[2].split():
             if unit not in ('ds-guard-apply.service',): errors.append('Foreign service depends on ds-guard: '+unit)
     if run(['dpkg', '--audit'])[1]: errors.append('Resolve existing dpkg errors first')
+    kernel_log_rc, kernel_log = run(['dmesg'])
+    errors.extend(kernel_diagnostic_errors(kernel_log_rc, kernel_log))
     if not Path('/run/systemd/system').exists(): errors.append('systemd is required')
     if run(['iptables', '-w', '5', '-S'])[0]: errors.append('Cannot read iptables rules')
     defaults = json.loads(run(['ip', '-j', '-4', 'route', 'show', 'default'])[1] or '[]')

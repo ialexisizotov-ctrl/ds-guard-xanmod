@@ -1,6 +1,6 @@
 # Loaded after the reviewed vendor library. No entry point or background jobs.
 DS_SAFE_ROOT=/usr/local/lib/ds-guard-safe
-NDPI_DKMS_VERSION=1.7.63880be7697-dsg1
+NDPI_DKMS_VERSION=1.7.63880be7697-dsg2
 NDPI_ARTIFACT_DKMS_VERSION=disabled
 NDPI_HELPER_VARS="$NDPI_HELPER_VARS DS_SAFE_ROOT"
 NDPI_HELPER_FUNCS="$NDPI_HELPER_FUNCS safe_patch_source"
