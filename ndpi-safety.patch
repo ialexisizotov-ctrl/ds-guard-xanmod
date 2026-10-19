@@ -11,12 +11,13 @@
  struct bt_announce {              // 192 bytes
 --- a/ndpi-netfilter/src/Makefile
 +++ b/ndpi-netfilter/src/Makefile
-@@ -6,7 +6,7 @@
+@@ -6,7 +6,8 @@
  #ccflags-y += -DUSE_GLOBAL_CONTEXT
  ccflags-y += -g -Wno-declaration-after-statement
  # Needed for pahole
 -ccflags-y += -femit-struct-debug-detailed=any
 +ccflags-y += $(call cc-option,-femit-struct-debug-detailed=any)
++ccflags-y += $(if $(filter 7.2.%,$(KERNELRELEASE)),-include $(src)/ndpi-compat72.h)
  
  ifndef $(KERNEL_DIR)
  KERNEL_DIR := /lib/modules/$(shell uname -r)/build

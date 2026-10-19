@@ -8,7 +8,7 @@
   "ndpi-netfilter/src/Makefile": [
     [
       "ccflags-y += -femit-struct-debug-detailed=any",
-      "ccflags-y += $(call cc-option,-femit-struct-debug-detailed=any)"
+      "ccflags-y += $(call cc-option,-femit-struct-debug-detailed=any)\nccflags-y += $(if $(filter 7.2.%,$(KERNELRELEASE)),-include $(src)/ndpi-compat72.h)"
     ]
   ],
   "ndpi-netfilter/src/main.c": [

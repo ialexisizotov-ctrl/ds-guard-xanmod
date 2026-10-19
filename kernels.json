@@ -1,0 +1,18 @@
+{
+  "7.0.12-x64v2-dsg1-xanmod1": {
+    "source_commit": "945bad56c1ffa8458975c557b855a6d8efef0319",
+    "image": "linux-image-7.0.12-x64v2-dsg1-xanmod1_7.0.12-dsg1_amd64.deb",
+    "image_sha256": "d79f3f82b259062d57efe8cd511d37f200a78b887a271b7c99c7f1a1a4755f2e",
+    "headers": "linux-headers-7.0.12-x64v2-dsg1-xanmod1_7.0.12-dsg1_amd64.deb",
+    "headers_sha256": "c4bebf8fe96d8ae11ebee2b06090187df17d60a834b93754c7866288dd3b875b",
+    "cpu_level": "x86-64-v2"
+  },
+  "7.2.9-x64v3-dsg1-xanmod1": {
+    "source_commit": "bca689d38274338b44a54e3bb198547c8eab8fc0",
+    "image": "linux-image-7.2.9-x64v3-dsg1-xanmod1_7.2.9-dsg1_amd64.deb",
+    "image_sha256": "911d46b8f14e0f56bac92aac817e30bd73060386cdb8183398e8812dcb09270b",
+    "headers": "linux-headers-7.2.9-x64v3-dsg1-xanmod1_7.2.9-dsg1_amd64.deb",
+    "headers_sha256": "5cdd86049dd81f4f9973d13f4ab9d4f2de6d1da5065f4cb7c17bc9104bad2ff8",
+    "cpu_level": "x86-64-v3"
+  }
+}

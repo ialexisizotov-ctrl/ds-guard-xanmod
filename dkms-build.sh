@@ -10,5 +10,10 @@ if grep -qx 'CONFIG_CC_IS_CLANG=y' "/boot/config-$kernelver"; then
   major=$((cv / 10000))
   command -v "clang-$major" >/dev/null || { echo "Install official LLVM $major first"; exit 78; }
   extra+=("LLVM=-$major")
+else
+  gv=$(sed -n 's/^CONFIG_GCC_VERSION=//p' "/boot/config-$kernelver")
+  major=$((gv / 10000))
+  command -v "gcc-$major" >/dev/null || { echo "Matching GCC $major is required"; exit 78; }
+  extra+=("CC=gcc-$major" "HOSTCC=gcc-$major")
 fi
 exec make -j2 -C ndpi-netfilter/src KERNEL_DIR="/lib/modules/$kernelver/build" modules EXTRA_CFLAGS='-std=gnu99 -Wno-error=implicit-function-declaration' "${extra[@]}"

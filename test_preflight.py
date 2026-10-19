@@ -8,6 +8,7 @@ class CompatibilityGate(unittest.TestCase):
     def test_accepted_family(self):
         self.assertEqual(self.check_kernel('6.8.0-147-generic'), [])
         self.assertEqual(self.check_kernel('7.0.12-x64v2-dsg1-xanmod1'), [])
+        self.assertEqual(self.check_kernel('7.2.9-x64v3-dsg1-xanmod1'), [])
     def test_stock_xanmod_rejected_before_mutation(self):
         self.assertTrue(self.check_kernel('7.0.12-x64v2-xanmod1','CONFIG_MODULES=y\nCONFIG_NETFILTER=y\nCONFIG_NF_CONNTRACK=m\n'))
     def test_unknown_future_kernel_rejected(self):

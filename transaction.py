@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Scoped, local transaction records. Never restore a global firewall snapshot."""
-import collections, glob, hashlib, json, os, re, shlex, shutil, subprocess, sys, time
+import collections, fcntl, glob, hashlib, json, os, re, shlex, shutil, subprocess, sys, time
 from pathlib import Path
 
 BASE=Path('/var/lib/ds-guard-safe/transactions')
@@ -85,6 +85,7 @@ def rollback(txn):
     run(['systemctl','stop','ds-guard.timer','ds-guard-apply.service','ds-guard.service'],False)
     # Remove only the exact three installer-owned base-hook forms.
     current=run(['iptables-save'])
+    foreign_before_rollback=foreign_rules(current)
     for line in current.splitlines():
         if managed_hook(line):
             p=shlex.split(line);p[0]='-D';run(['iptables','-w','5',*p],False)
@@ -109,6 +110,11 @@ def rollback(txn):
         p=Path(name);p.parent.mkdir(parents=True,exist_ok=True)
         if p.is_symlink():p.unlink()
         shutil.copy2(txn/'files'/p.relative_to('/'),p,follow_symlinks=False)
+        backup=txn/'files'/p.relative_to('/')
+        if p.is_symlink():
+            if os.readlink(p)!=os.readlink(backup):raise RuntimeError('Rollback symlink verification failed')
+        elif hashlib.sha256(p.read_bytes()).digest()!=hashlib.sha256(backup.read_bytes()).digest():
+            raise RuntimeError('Rollback file verification failed')
     run(['depmod','-a',b['kernel']],False,timeout=90)
     if b['acct'] in ('0','1'):run(['sysctl','-w','net.netfilter.nf_conntrack_acct='+b['acct']],False)
     run(['systemctl','daemon-reload'],False)
@@ -117,10 +123,20 @@ def rollback(txn):
         elif state['enabled'] not in ('static','indirect','generated','alias'):run(['systemctl','disable',unit],False)
         if state['active']=='active':run(['systemctl','restart',unit],False,timeout=90)
         else:run(['systemctl','stop',unit],False)
-    save(txn/'rolled-back',{'time':time.time(),'module_not_forcibly_unloaded':True,'global_firewall_not_restored':True})
+    if foreign_rules(run(['iptables-save']))!=foreign_before_rollback:
+        raise RuntimeError('Foreign firewall changed during rollback; independent recovery remains armed')
+    for unit,state in b['units'].items():
+        if state['active']=='active' and run(['systemctl','is-active',unit],False)!='active':
+            raise RuntimeError('Previously active service did not recover: '+unit)
+    if b['acct'] in ('0','1') and run(['sysctl','-n','net.netfilter.nf_conntrack_acct'])!=b['acct']:
+        raise RuntimeError('Conntrack accounting rollback verification failed')
+    save(txn/'rolled-back',{'time':time.time(),'module_not_forcibly_unloaded':True,'global_firewall_not_restored':True,'files_restored_verified':True,'foreign_firewall_preserved':True,'previously_active_services_restored':True})
 
 if __name__=='__main__':
     if len(sys.argv)!=3 or sys.argv[1] not in ('rollback','capture-package-default'):sys.exit(64)
     txn=valid_txn(sys.argv[2])
-    if sys.argv[1]=='rollback':rollback(txn)
+    if sys.argv[1]=='rollback':
+        with (BASE.parent/'install.lock').open('w') as lock:
+            fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            rollback(txn)
     else:capture_package_default(txn)

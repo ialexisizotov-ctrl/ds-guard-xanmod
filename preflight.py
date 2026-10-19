@@ -16,7 +16,7 @@ def assess(kernel, config, os_id, arch, container, lockdown, free, available):
     if container: errors.append('An independent host kernel is required; containers/WSL are unsupported')
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._+~-]{0,127}', kernel): errors.append('Invalid kernel release')
     # A successful compile does not prove that a replacement conntrack destructor is safe.
-    if not (kernel.startswith('6.8.0-') or kernel == '7.0.12-x64v2-dsg1-xanmod1'):
+    if not (kernel.startswith('6.8.0-') or kernel in ('7.0.12-x64v2-dsg1-xanmod1', '7.2.9-x64v3-dsg1-xanmod1')):
         errors.append('Kernel has not passed this release\'s runtime compatibility gate')
     for flag in ('CONFIG_MODULES', 'CONFIG_NETFILTER', 'CONFIG_NF_CONNTRACK', 'CONFIG_LIVEPATCH'):
         if not re.search(r'^' + flag + r'=[ym]$', config, re.M): errors.append(flag + ' is required')

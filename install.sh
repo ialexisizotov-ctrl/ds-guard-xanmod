@@ -8,8 +8,10 @@ if [ "${1:-}" = --check ]; then exec python3 preflight.py; fi
 python3 preflight.py || exit 78
 exec 8>/run/ds-guard-safe-launch.lock
 flock -n 8 || { echo 'Another installer is running'; exit 75; }
-state=$(systemctl show ds-guard-safe-install.service -p ActiveState --value 2>/dev/null || true)
-case "$state" in active|activating|deactivating) echo 'Installation is already running'; exit 75;; esac
+for unit in ds-guard-safe-install.service ds-guard-safe-recover.service; do
+  state=$(systemctl show "$unit" -p ActiveState --value 2>/dev/null || true)
+  case "$state" in active|activating|deactivating) echo 'Installation or recovery is already running'; exit 75;; esac
+done
 install -d -m 0755 /usr/local/lib/ds-guard-safe
 # Only manifest-listed regular files from this release are installed.
 python3 - <<'PY'

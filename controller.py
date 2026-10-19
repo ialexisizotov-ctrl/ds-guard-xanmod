@@ -2,12 +2,15 @@
 import argparse, fcntl, hashlib, json, os, re, shutil, subprocess, sys, time, uuid
 from pathlib import Path
 import preflight
+from module_identity import loaded_matches
 from transaction import BASE, begin, run, save, rollback, foreign_rules
 
 ROOT=Path('/usr/local/lib/ds-guard-safe')
 STATE=Path('/var/lib/ds-guard-safe')
 
 def digest(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+def listener_endpoints(text):
+    return {tuple(line.split()[3:5]) for line in text.splitlines() if len(line.split())>=5}
 
 def driver(phase,txn):
     with (txn/'driver.log').open('a') as log:
@@ -17,6 +20,8 @@ def driver(phase,txn):
 
 def runtime_check(txn,before):
     driver('verify',txn)
+    if not loaded_matches(run(['modinfo','-n','xt_ndpi'])):
+        raise RuntimeError('Loaded module identity differs from the verified file on disk')
     if run(['sysctl','-n','net.netfilter.nf_conntrack_acct'])!='1':raise RuntimeError('Conntrack accounting unavailable')
     queues=Path('/proc/net/netfilter/nfnetlink_queue').read_text().splitlines()
     if not {0,1} <= {int(l.split()[0]) for l in queues}:raise RuntimeError('NFQUEUE listeners missing')
@@ -32,8 +37,10 @@ def runtime_check(txn,before):
     def routes(s):
         return sorted(json.dumps({k:v for k,v in r.items() if k not in ('expires','flags')},sort_keys=True) for r in json.loads(s))
     if routes(before['routes'])!=routes(run(['ip','-j','route','show','table','all'])):raise RuntimeError('Network routes changed')
-    now_listeners=set(run(['ss','-Hlnpt']).splitlines())
-    if not set(before['tcp_listeners'].splitlines())<=now_listeners:raise RuntimeError('A pre-existing TCP listener changed')
+    # Queue depth, file descriptor order and socket-activation ownership can
+    # change without losing a listener. Gate on the listening endpoints.
+    if not listener_endpoints(before['tcp_listeners'])<=listener_endpoints(run(['ss','-Hlnpt'])):
+        raise RuntimeError('A pre-existing TCP listening endpoint disappeared')
     if before['boot_id']!=Path('/proc/sys/kernel/random/boot_id').read_text().strip():raise RuntimeError('Unexpected reboot during transaction')
     # Strict TLS and a small real response. Additional application acceptance
     # is supplied by the operator through --health-command.
@@ -52,6 +59,10 @@ def execute(health_command=None):
     with (STATE/'install.lock').open('w') as lock:
         try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except BlockingIOError:raise RuntimeError('Another installation is running')
+        if (STATE/'current.json').exists():
+            previous=Path(json.loads((STATE/'current.json').read_text())['transaction'])
+            if not (previous/'committed').exists() and not (previous/'rolled-back').exists():
+                raise RuntimeError('An unfinished transaction requires ds-guard-safe-recover.service before retry')
         txn=BASE/str(uuid.uuid4());before=begin(txn)
         save(STATE/'current.json',{'transaction':str(txn)})
         shutil.copy2(ROOT/'transaction.py',txn/'transaction.py')
@@ -62,9 +73,8 @@ def execute(health_command=None):
         try:
             driver('prepare',txn)
             module=run(['modinfo','-n','xt_ndpi']);sha=digest(module)
-            old=txn/'files'/before['module_before'].lstrip('/') if before['module_before'] else None
             if before['loaded']:driver('plugin-check',txn)
-            if before['loaded'] and (not old or not old.is_file() or digest(old)!=sha):
+            if before['loaded'] and not loaded_matches(module):
                 # No unloading of a livepatch module; a planned reboot is required.
                 save(STATE/'pending.json',{'kernel':result['kernel'],'module':module,'sha256':sha,'staged_boot_id':before['boot_id'],'transaction':str(txn)})
                 (txn/'committed').write_text('Module staged; running module retained. Reboot required before activation.\n')
@@ -89,6 +99,11 @@ def execute(health_command=None):
             print('SUCCESS: 3/3 local layers verified. Transaction '+str(txn),flush=True)
             settled=True
             return 0
+        except subprocess.TimeoutExpired:
+            # systemd must stop every remaining worker before recovery restores
+            # files. In-process rollback could race an orphaned package/build job.
+            print('TIMEOUT: recovery will run after systemd stops the worker group.',flush=True)
+            raise
         except BaseException:
             rollback(txn)
             settled=True

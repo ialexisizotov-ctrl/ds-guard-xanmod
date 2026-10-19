@@ -5,7 +5,7 @@
   },
   "ndpi-netfilter/src/Makefile": {
     "original": "9d8e3da6a66538e88a075a618ab26cf71749f037f9cf94dfc80fe47a85e3a032",
-    "patched": "05fca0025abd34fd0b7336cfb3a2519abdd7107b7a52c9134323106f46652e06"
+    "patched": "94b135c22346b9729a1bfd46a9b6c1511d25c392f932ba25c245821f54980e7f"
   },
   "ndpi-netfilter/src/main.c": {
     "original": "a402513dcf6120e565817575fc49d79c50fb55309ff5e92f620533fc2538ac07",

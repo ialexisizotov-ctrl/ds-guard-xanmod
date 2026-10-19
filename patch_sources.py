@@ -17,3 +17,4 @@ for name, replacements in changes.items():
  prepared[p]=updated
 for p,updated in prepared.items():p.write_text(updated)
 (root/'ndpi-netfilter/src/livepatch/v7.2.c').write_bytes((here/'v7.2.c').read_bytes())
+(root/'ndpi-netfilter/src/ndpi-compat72.h').write_bytes((here/'ndpi-compat72.h').read_bytes())
