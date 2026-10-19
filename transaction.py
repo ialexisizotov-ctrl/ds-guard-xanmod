@@ -30,6 +30,34 @@ def foreign_rules(text):
             if line.split()[1]!='ACCEPT':out.append(table+' '+re.sub(r'\[\d+:\d+\]','[COUNTERS]',line))
     return out
 
+def validate_managed_scope(text):
+    table=''
+    for line in text.splitlines():
+        if line.startswith('*'):table=line[1:]
+        if line.startswith(':') and line.split()[0][1:] in CHAINS and table!='filter':raise RuntimeError('Имя цепочки ds-guard занято в другой таблице firewall')
+        if not line.startswith('-A '):continue
+        tokens=shlex.split(line)
+        if (tokens[1] in CHAINS or managed_hook(line)) and table!='filter':raise RuntimeError('Правило ds-guard находится вне таблицы filter')
+        target=next((tokens[i+1] for i,t in enumerate(tokens[:-1]) if t in ('-j','-g')),None)
+        if target in CHAINS and tokens[1] not in CHAINS and not managed_hook(line):raise RuntimeError('Чужое правило использует цепочки ds-guard; автоматическая замена остановлена')
+
+def detach_managed_hooks(execute=run):
+    current=execute(['iptables-save']);validate_managed_scope(current)
+    foreign=foreign_rules(current);positions=collections.defaultdict(int);removals=[];table=''
+    for line in current.splitlines():
+        if line.startswith('*'):table=line[1:]
+        if table!='filter' or not line.startswith('-A '):continue
+        chain=shlex.split(line)[1];positions[chain]+=1
+        if managed_hook(line):removals.append((chain,positions[chain],line))
+    # nDPI rule serialization is not always equality-preserving for -D rule.
+    # Delete by position only after an exact immediate readback of that rule.
+    for chain,index,line in reversed(removals):
+        live=[l for l in execute(['iptables','-w','5','-S',chain]).splitlines() if l.startswith('-A ')]
+        if len(live)<index or live[index-1]!=line:raise RuntimeError('Правила firewall изменились перед снятием собственного подключения')
+        execute(['iptables','-w','5','-D',chain,str(index)])
+        if foreign_rules(execute(['iptables-save']))!=foreign:raise RuntimeError('Изменились чужие правила firewall при снятии собственного подключения')
+    return current
+
 def save(path, value):
     temp=path.with_suffix('.next');temp.write_text(json.dumps(value,indent=2));temp.chmod(0o600);temp.replace(path)
 
@@ -40,6 +68,7 @@ def owned_paths(kernel):
     paths += ['/etc/ds-guard/'+n for n in ['domains.txt','domain-labels.txt','domain-generation.env','domain-patterns.txt','conntrack-owner.env']]
     paths += ['/usr/local/sbin/ds-guard-'+n+'.sh' for n in ['ndpi-lib','ensure','apply','kprep']]
     paths += ['/etc/systemd/system/'+n for n in ['ds-guard.service','ds-guard-apply.service','ds-guard.timer','ds-guard-kprep@.service']]
+    paths += ['/etc/systemd/system/'+n+'.d/90-codex-ndpi-memory-hold.conf' for n in ['ds-guard.service','ds-guard-apply.service']]
     paths += ['/etc/kernel/'+n+'/zz-ds-guard' for n in ['postinst.d','header_postinst.d','postrm.d']]
     for pattern in ['/usr/lib/*/xtables/libxt_ndpi.so','/lib/modules/'+kernel+'/updates/dkms/xt_ndpi.ko*']:
         paths.extend(glob.glob(pattern))
@@ -87,13 +116,12 @@ def capture_package_default(txn):
 def rollback(txn):
     if (txn/'committed').exists() or (txn/'rolled-back').exists(): return
     b=json.loads((txn/'before.json').read_text())
+    restore_quarantine_first(txn,b)
     run(['systemctl','stop','ds-guard.timer','ds-guard-apply.service','ds-guard.service'],False)
     # Remove only the exact three installer-owned base-hook forms.
     current=run(['iptables-save'])
     foreign_before_rollback=foreign_rules(current)
-    for line in current.splitlines():
-        if managed_hook(line):
-            p=shlex.split(line);p[0]='-D';run(['iptables','-w','5',*p],False)
+    detach_managed_hooks(run)
     # Rebuild only seven named installer chains. Never flush INPUT, OUTPUT,
     # FORWARD, Docker, UFW, or another nftables table.
     for c in CHAINS:
@@ -136,6 +164,24 @@ def rollback(txn):
     if b['acct'] in ('0','1') and run(['sysctl','-n','net.netfilter.nf_conntrack_acct'])!=b['acct']:
         raise RuntimeError('Conntrack accounting rollback verification failed')
     save(txn/'rolled-back',{'time':time.time(),'module_not_forcibly_unloaded':True,'global_firewall_not_restored':True,'files_restored_verified':True,'foreign_firewall_preserved':True,'previously_active_services_restored':True})
+
+def restore_quarantine_first(txn,b,root=Path('/')):
+    # Re-arm the known boot hold before any fallible firewall/file recovery.
+    # A failed recovery must never leave an unaccepted service free to boot.
+    names=['/etc/systemd/system/'+u+'.d/90-codex-ndpi-memory-hold.conf' for u in ['ds-guard.service','ds-guard-apply.service']]
+    body='[Unit]\nConditionPathExists=!/root/codex-dsguard-20261019/ndpi-memory-safety-hold\n'
+    restored=False
+    for name in names:
+        if name not in b['files']:continue
+        backup=txn/'files'/name.lstrip('/');dest=root/name.lstrip('/')
+        if backup.is_symlink() or backup.read_text()!=body:raise RuntimeError('Не подтверждена резервная копия запрета прежнего nDPI')
+        if dest.is_symlink() or dest.exists() and dest.read_text()!=body:raise RuntimeError('Запрет запуска изменён вне установки; возврат остановлен')
+        if not dest.exists():
+            dest.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copy2(backup,dest);os.chown(dest,backup.stat().st_uid,backup.stat().st_gid)
+        if dest.read_text()!=body:raise RuntimeError('Запрет запуска не восстановлен')
+        restored=True
+    if restored:run(['systemctl','daemon-reload'])
 
 if __name__=='__main__':
     if len(sys.argv)!=3 or sys.argv[1] not in ('rollback','capture-package-default'):sys.exit(64)

@@ -49,7 +49,9 @@ def runtime_check(txn,before):
     return {'local_layers':3,'nfqueue_listeners':[0,1],'new_kernel_errors':0,'foreign_firewall_preserved':True,'strict_https':True}
 
 def execute(health_command=None):
-    result=preflight.collect()
+    from legacy_context import preflight as installation_preflight
+    result=installation_preflight(ROOT,require_journal=True)
+    legacy=result.get('legacy_upgrade')
     if not result['compatible']:print(json.dumps(result,indent=2));return 78
     STATE.mkdir(mode=0o700,exist_ok=True);BASE.mkdir(mode=0o700,exist_ok=True)
     pending=STATE/'pending.json'
@@ -74,7 +76,8 @@ def execute(health_command=None):
         try:
             driver('prepare',txn)
             module=run(['modinfo','-n','xt_ndpi']);sha=digest(module)
-            if before['loaded']:driver('plugin-check',txn)
+            # A quarantined legacy module must not even receive a probe rule.
+            if before['loaded'] and not legacy:driver('plugin-check',txn)
             if before['loaded'] and not loaded_matches(module):
                 # No unloading of a livepatch module; a planned reboot is required.
                 save(STATE/'pending.json',{'kernel':result['kernel'],'module':module,'sha256':sha,'staged_boot_id':before['boot_id'],'transaction':str(txn)})
@@ -82,7 +85,13 @@ def execute(health_command=None):
                 print('REBOOT_REQUIRED: module prepared; current traffic and loaded module retained. Run installer after planned reboot.',flush=True)
                 settled=True
                 return 20
+            # A stage-only gate never permits activation in the current boot,
+            # even if a race unexpectedly changed the module identity.
+            if result['stage_only']:raise RuntimeError('Требуется отдельная перезагрузка перед активацией обновления')
             driver('load',txn)
+            if legacy:
+                from legacy_upgrade import release_hold
+                release_hold(root=ROOT)
             if before['acct'] not in ('0','1'):
                 before['acct']=run(['sysctl','-n','net.netfilter.nf_conntrack_acct'])
                 save(txn/'before.json',before)

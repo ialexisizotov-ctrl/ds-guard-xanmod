@@ -6,7 +6,7 @@ no global firewall restore, no forced livepatch unload and no autoremove.
 """
 import argparse,fcntl,hashlib,json,os,re,shlex,shutil,subprocess,time,uuid
 from pathlib import Path
-from transaction import CHAINS,UNITS,managed_hook,foreign_rules
+from transaction import CHAINS,UNITS,managed_hook,foreign_rules,detach_managed_hooks
 
 STATE=Path('/var/lib/ds-guard-safe/lifecycle')
 SYSCTLS=['net.netfilter.nf_conntrack_acct']
@@ -22,6 +22,9 @@ EXACT=['/etc/suricata/suricata.yaml','/etc/suricata/rules/ds-p2p.rules',
 EXACT += ['/usr/local/sbin/ds-guard-'+n+'.sh' for n in ['ndpi-lib','ensure','apply','kprep']]
 EXACT += ['/etc/systemd/system/'+n for n in ['ds-guard.service','ds-guard-apply.service','ds-guard.timer','ds-guard-kprep@.service']]
 EXACT += ['/etc/kernel/'+n+'/zz-ds-guard' for n in ['postinst.d','header_postinst.d','postrm.d']]
+EXACT += ['/root/codex-dsguard-20261019/ndpi-memory-safety-hold']
+EXACT += ['/var/lib/ds-guard-safe/'+n for n in ['installed.json','pending.json','current.json']]
+EXACT += ['/etc/systemd/system/'+n+'.service.d/90-codex-ndpi-memory-hold.conf' for n in ['ds-guard','ds-guard-apply']]
 HOLD=Path('/etc/systemd/system/ds-guard.service.d/95-safe-disabled.conf')
 APPLY_HOLD=Path('/etc/systemd/system/ds-guard-apply.service.d/95-safe-disabled.conf')
 LOAD=Path('/etc/modules-load.d/xt_ndpi.conf')
@@ -118,6 +121,7 @@ def snapshot():
  return {'files':{p:stamp(p) for p in sorted(names)},'file_owners':owners,'packages':installed,'ownership_schema':1,'owned_packages':owned,'manual':run(['apt-mark','showmanual']).splitlines(),
   'units':units(),'values':values(),'iptables':run(['iptables-save']),'kernel':os.uname().release,
   'module_state':{n:Path('/sys/module',n).exists() for n in ['xt_ndpi','tcp_bbr','nf_conntrack']},
+  'loaded_module_note_hex':Path('/sys/module/xt_ndpi/notes/.note.gnu.build-id').read_bytes().hex() if Path('/sys/module/xt_ndpi/notes/.note.gnu.build-id').is_file() else None,
   'conntrack_hashsize':Path('/sys/module/nf_conntrack/parameters/hashsize').read_text().strip() if Path('/sys/module/nf_conntrack/parameters/hashsize').exists() else None,'time':time.time()}
 
 def changed_files(before,after):return {p for p in set(before)|set(after) if before.get(p)!=after.get(p)}
@@ -133,19 +137,35 @@ def conflicts(original,expected,actual):
  # is safe and allows interrupted removal to be resumed.
  return sorted(p for p in changed_files(original,expected) if actual.get(p) not in (original.get(p),expected.get(p)))
 
-def begin():
+def begin(legacy_upgrade=False,legacy_cold_boot=False):
  STATE.mkdir(parents=True,mode=0o700,exist_ok=True)
+ if (STATE/'rollback-upgrade-progress.json').exists() and not (STATE/'rollback-upgrade-completed.json').exists():
+  raise RuntimeError('Откат обновления не завершён. Сначала повторите rollback-upgrade; новая установка не начата.')
+ if (STATE/'rollback-upgrade-completed.json').exists():
+  # A completed rollback ends the upgrade cycle. Validate its restored state
+  # and atomically retain the whole journal before beginning a new baseline.
+  from rollback_upgrade import rollback_upgrade
+  rollback_upgrade(plan=True)
+  b,a=read_records();verify_repeat_baseline(b,a,snapshot())
+  STATE.rename(STATE.with_name('lifecycle-upgrade-archive-'+str(uuid.uuid4())))
+  STATE.mkdir(mode=0o700)
  if (STATE/'removed.json').exists():
   STATE.rename(STATE.with_name('lifecycle-archive-'+str(uuid.uuid4())))
   STATE.mkdir(mode=0o700)
  if (STATE/'pending.json').exists():raise RuntimeError('Предыдущая операция не завершена; нужен просмотр журнала перед повторным запуском')
  if (STATE/'after.json').exists():recorded_package_ownership(json.loads((STATE/'after.json').read_text()))
  if not (STATE/'before.json').exists():
-  # Old installs have no reliable pre-install image. Never pretend an adoption
-  # snapshot could remove changes made before this installer was introduced.
-  if Path('/etc/systemd/system/ds-guard.service').exists() or Path('/var/lib/ds-guard-safe/installed.json').exists():
+  # The caller must validate a legacy upgrade before explicitly opting in.
+  # Its baseline is the present legacy installation, never a reconstructed
+  # image of the system before the original guard installation.
+  legacy=Path('/etc/systemd/system/ds-guard.service').exists() or Path('/var/lib/ds-guard-safe/installed.json').exists()
+  if legacy and legacy_upgrade is not True:
    raise RuntimeError('Обнаружена прежняя установка без исходного журнала. Автоматическое полное удаление её изменений недоказуемо; требуется перенос проверенной резервной копии.')
   d=snapshot()
+  d['baseline_kind']='legacy-upgrade' if legacy else 'fresh'
+  # Every package present before this journal is external to this upgrade,
+  # even if its name suggests that an older guard installer installed it.
+  d['ownership_schema']=1;d['owned_packages']={}
   # Metadata only: detect an unmanaged pre-existing config later claimed by a
   # newly installed dependency without copying unrelated production secrets.
   d['existing_etc_paths']=[str(p) for p in Path('/etc').rglob('*') if p.is_file() or p.is_symlink()]
@@ -156,7 +176,7 @@ def begin():
   save(STATE/'before.json',d);save(STATE/'after.json',d)
   current=d
  else:
-  b,a=read_records();current=snapshot();verify_repeat_baseline(b,a,current)
+  b,a=read_records();current=snapshot();verify_repeat_baseline(b,a,current,legacy_cold_boot=legacy_cold_boot)
  save(STATE/'pending.json',{'started':time.time(),'boot_id':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'operation_id':str(uuid.uuid4()),'packages_before':current['packages'],'metadata_before':{k:current[k] for k in ['files','file_owners','values','units','manual']}})
 
 def seal(rc):
@@ -216,7 +236,7 @@ def restore_file(name,item):
   if [p.lstat().st_uid,p.lstat().st_gid]!=owner:raise RuntimeError('Не восстановлен владелец файла: '+name)
  if stamp(p)!=item:raise RuntimeError('Не удалось проверить восстановленный файл: '+name)
 
-def verify_no_conflict(b,a,actual):
+def verify_no_conflict(b,a,actual,legacy_cold_boot=False):
  bad=conflicts(b['files'],a['files'],actual['files'])
  if bad:raise RuntimeError('После установки изменены файлы. Они не будут перезаписаны: '+', '.join(bad[:8]))
  for p in changed_owned(b,a):
@@ -229,11 +249,17 @@ def verify_no_conflict(b,a,actual):
   if a['packages'].get(pkg)!=version:raise RuntimeError('Установка изменила ранее существовавший пакет; требуется отдельный возврат: '+pkg)
  def owned_rules(text):
   return [l for l in text.splitlines() if l.startswith('-A ') and (managed_hook(l) or shlex.split(l)[1] in CHAINS)]
- if owned_rules(actual['iptables']) not in (owned_rules(a['iptables']),owned_rules(b['iptables'])):
-  raise RuntimeError('Собственные цепочки фильтрации изменились после установки. Нужна проверка их текущего владельца.')
+ current_rules=owned_rules(actual['iptables'])
+ if current_rules not in (owned_rules(a['iptables']),owned_rules(b['iptables'])):
+  # A separately verified cold legacy resume may have lost volatile rules.
+  # Only missing rules are allowed; never attribute added rules to the update.
+  expected=iter(owned_rules(a['iptables']))
+  subset=all(any(candidate==line for candidate in expected) for line in current_rules)
+  if not (legacy_cold_boot is True and b.get('baseline_kind')=='legacy-upgrade' and subset and not any('-m ndpi ' in l for l in current_rules)):
+   raise RuntimeError('Собственные цепочки фильтрации изменились после установки. Нужна проверка их текущего владельца.')
 
-def verify_repeat_baseline(b,a,current):
- verify_no_conflict(b,a,current)
+def verify_repeat_baseline(b,a,current,legacy_cold_boot=False):
+ verify_no_conflict(b,a,current,legacy_cold_boot=legacy_cold_boot)
  # Do not adopt changes made while the installer was idle. A future explicit
  # migration can preserve a new first-touch baseline; this version refuses it.
  owned=changed_owned(b,a)
@@ -302,9 +328,7 @@ def sealed_values(operation,previous,current):
 
 def detach_rules():
  before=run(['iptables-save']);foreign=foreign_rules(before)
- for line in before.splitlines():
-  if managed_hook(line):
-   p=shlex.split(line);p[0]='-D';run(['iptables','-w','5',*p])
+ detach_managed_hooks(run)
  if foreign_rules(run(['iptables-save']))!=foreign:raise RuntimeError('Изменились посторонние правила firewall')
 
 def guard_changed(b,a):
@@ -317,8 +341,17 @@ def runtime_reboot_needed(b):
  p=Path('/sys/module/nf_conntrack/parameters/hashsize')
  return b.get('conntrack_hashsize') is not None and p.exists() and p.read_text().strip()!=b['conntrack_hashsize']
 
+def refuse_legacy_lifecycle(action,before=None):
+ if before is None:
+  p=STATE/'before.json'
+  if not p.exists():return
+  before=json.loads(p.read_text())
+ if before.get('baseline_kind')=='legacy-upgrade':
+  raise RuntimeError('Автоматическое '+action+' прежней установки пока не поддерживается: исходное состояние до первой установки неизвестно. Резервная копия состояния перед обновлением сохранена; нужен отдельно проверенный план восстановления.')
+
 def disable():
- b,a=read_records();now=snapshot();verify_no_conflict(b,a,now)
+ b,a=read_records();refuse_legacy_lifecycle('отключение',b)
+ now=snapshot();verify_no_conflict(b,a,now)
  if (STATE/'disabled').exists() and (STATE/'disabled-complete.json').exists():print('[ОТКЛЮЧЕНО] Повторное отключение не требуется.');return 0
  guard=guard_changed(b,a)
  if guard and any(managed_hook(l) for l in b['iptables'].splitlines()):raise RuntimeError('В исходном состоянии уже есть ds-guard; отключение требует отдельного плана сохранения прежней защиты')
@@ -363,8 +396,9 @@ def enable_prepare():
  (STATE/'disabled').unlink();(STATE/'disabled-complete.json').unlink();run(['systemctl','daemon-reload'])
 
 def removal_plan():
+ b,a=read_records();refuse_legacy_lifecycle('полное удаление',b)
  if run(['dpkg','--audit']):raise RuntimeError('Есть незавершённая операция пакетного менеджера. Сначала требуется её восстановление.')
- b,a=read_records();now=snapshot();verify_no_conflict(b,a,now)
+ now=snapshot();verify_no_conflict(b,a,now)
  owned=recorded_package_ownership(a)
  if set(owned)&set(b['packages']):raise RuntimeError('Журнал ошибочно присваивает исходные пакеты системы')
  for p,v in owned.items():
@@ -384,6 +418,7 @@ def removal_plan():
  return b,a,now,remove,kernels,blocked
 
 def remove(plan=False):
+ refuse_legacy_lifecycle('полное удаление')
  if (STATE/'removed.json').exists():
   print('[УДАЛЕНО] Установка уже удалена. Повторное удаление не требуется.');return 0
  b,a,now,pkgs,kernels,blocked=removal_plan()

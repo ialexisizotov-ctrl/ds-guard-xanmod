@@ -136,16 +136,16 @@ def read_choice(prompt):
   raise Refusal('Нет интерактивного терминала. Укажите режим через --mode; список доступен с --help.')
 
 def menu():
- print('Установщик ds-guard и ядра\n1. Всё целиком: ядро + ds-guard + настройка сети\n2. Только XanMod\n3. Только настройка сети\n4. Только ds-guard\n5. Проверка и план без изменений\n6. Состояние системы\n7. Отключить фильтрацию и сетевой профиль\n8. Удалить изменения установщика\n9. Только ядро Ubuntu\n0. Выход')
+ print('Установщик ds-guard и ядра\n1. Всё целиком: ядро + ds-guard + настройка сети\n2. Только XanMod\n3. Только настройка сети\n4. Только ds-guard\n5. Проверка и план без изменений\n6. Состояние системы\n7. Отключить фильтрацию и сетевой профиль\n8. Удалить изменения установщика\n9. Только ядро Ubuntu\n10. Отменить обновление прежней установки\n0. Выход')
  choice=read_choice('Выберите пункт: ')
- modes={'1':'full','2':'kernel-xanmod','3':'tune','4':'guard','5':'check','6':'status','7':'disable','8':'remove','9':'kernel-ubuntu','0':'exit'}
+ modes={'1':'full','2':'kernel-xanmod','3':'tune','4':'guard','5':'check','6':'status','7':'disable','8':'remove','9':'kernel-ubuntu','10':'rollback-upgrade','0':'exit'}
  if choice not in modes:raise Refusal('Неизвестный пункт меню.')
  return modes[choice]
 
 def main(argv=None):
  ap=Parser(usage='%(prog)s [параметры]',description='Режимы: full — всё; kernel — только ядро; tune — сеть; guard — ds-guard; check — план; status — состояние; disable — отключить; remove — удалить и восстановить.',epilog='Ядра выбираются из проверенного каталога выпуска. Перезагрузка выполняется отдельным шагом. Автообновления по расписанию не создаются.')
  ap._optionals.title='Параметры';ap._positionals.title='Аргументы';ap._actions[0].help='показать справку и выйти'
- ap.add_argument('--mode',choices=['full','kernel','tune','guard','check','status','disable','remove'],help='режим; без параметра открывается меню')
+ ap.add_argument('--mode',choices=['full','kernel','tune','guard','check','status','disable','remove','rollback-upgrade'],help='режим; rollback-upgrade отменяет обновление прежней установки; без параметра открывается меню')
  ap.add_argument('--kernel-policy',choices=['prefer-xanmod','xanmod','ubuntu','keep'],default='prefer-xanmod',help='предпочесть XanMod (по умолчанию), только XanMod, Ubuntu или текущее ядро')
  ap.add_argument('--tuning',choices=['vpn','keep'],default='vpn',help='в полном режиме применить сетевой профиль либо оставить прежние значения')
  ap.add_argument('--health-command',help='команда проверки реального приложения; ненулевой код считается отказом')
@@ -154,24 +154,37 @@ def main(argv=None):
  if a.mode in ('kernel-xanmod','kernel-ubuntu'):a.kernel_policy=a.mode.split('-',1)[1];a.mode='kernel'
  if a.mode=='exit':return 0
  if a.mode=='status':return status()
- if a.mode in ('disable','remove'):
+ if a.mode in ('disable','remove','rollback-upgrade'):
   if os.geteuid():raise Refusal('Запустите установщик с правами root.')
   import lifecycle
   with Path('/run/ds-guard-safe-lifecycle.lock').open('w') as life_lock, Path('/run/ds-guard-safe-launch.lock').open('w') as lock:
    fcntl.flock(life_lock,fcntl.LOCK_EX|fcntl.LOCK_NB);fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
    for unit in ['ds-guard-safe-install','ds-guard-safe-recover','ds-guard-safe-kernel-stage','ds-guard-safe-kernel-cleanup','ds-guard-safe-tune','ds-guard-safe-tune-recover']:
     if command(['systemctl','show',unit+'.service','-p','ActiveState','--value'])[1] in ('active','activating','deactivating'):raise Refusal('Сначала дождитесь завершения установки или восстановления.')
+   if a.mode=='rollback-upgrade':
+    from rollback_upgrade import rollback_upgrade
+    return rollback_upgrade(plan=a.plan)
    if a.mode=='remove':return lifecycle.remove(a.plan)
    if a.plan:print('[ПЛАН] Остановить собственную фильтрацию, запретить её автозапуск и вернуть сетевые значения.');return 0
    return lifecycle.disable()
  info=system_info()
  if info['architecture']!='x86_64':raise Refusal('Поддерживается только архитектура amd64.')
  catalog=json.loads((ROOT/'kernels.json').read_text())
+ legacy=None
+ if a.mode in ('full','guard') and not a.plan and os.geteuid()==0:
+  from legacy_context import context
+  legacy=context(ROOT)
  policy='keep' if a.mode in ('guard','tune') else a.kernel_policy
+ if legacy:policy='keep'
  kernel,reason=choose_kernel(catalog,info['os_id'],info['os_version'],info['flags'],info['kernel'],policy,info['loaded_modules'])
  print(f"Система: Ubuntu {info['os_version']}; текущее ядро: {info['kernel']}")
  print('Выбранное ядро: '+kernel+'\n'+reason)
  print('Режим: '+{'full':'ядро, ds-guard и сетевой профиль' if a.tuning=='vpn' else 'ядро и ds-guard','kernel':'только подготовка ядра','tune':'только сетевой профиль','guard':'только ds-guard','check':'проверка без изменений'}[a.mode])
+ if legacy:
+  print('[ПЕРЕУСТАНОВКА] Обнаружена прежняя установка. Сначала обновляется ds-guard на текущем ядре; смена ядра отложена до успешного перехода.')
+  print('[РЕЗЕРВНАЯ КОПИЯ] Сохраняется состояние перед обновлением. Это не копия системы до первоначальной установки ds-guard.')
+  if legacy['requires_reboot']:print('[ПОДГОТОВКА] Новый модуль будет записан на диск. Загруженный модуль сохраняется; активация возможна только после отдельной перезагрузки и повторного запуска этой же команды.')
+  if not legacy.get('two_layers_present',True):print('[НЕ ПРОВЕРЕНО] После перезагрузки прежние правила защиты отсутствуют или неполны; их работоспособность будет проверена после установки.')
  if a.mode=='check' or a.plan:
   print('[ПЛАН] Выбор версии выполнен. Установка, изменение загрузчика, настройка сети и перезагрузка не выполнялись.');return 0
  if os.geteuid():raise Refusal('Запустите установщик с правами root.')
@@ -179,7 +192,7 @@ def main(argv=None):
  if command(['systemd-detect-virt','--container'])[0]==0:raise Refusal('Контейнер или WSL не поддерживается.')
  from preflight import kernel_diagnostic_errors
  rc,dm,_=command(['dmesg'])
- if kernel_diagnostic_errors(rc,dm):raise Refusal('В текущей загрузке есть ошибки ядра или журнал недоступен. Сначала требуется диагностика.')
+ if kernel_diagnostic_errors(rc,dm) and not (legacy and legacy['requires_reboot']):raise Refusal('В текущей загрузке есть ошибки ядра или журнал недоступен. Сначала требуется диагностика.')
  if a.mode in ('full','guard') and not (ROOT/'assets'/kernel/'manifest.json').exists():raise Refusal('Для выбранного ядра в комплекте нет проверенного модуля ds-guard.')
  logdir=Path('/var/log/ds-guard-safe');logdir.mkdir(mode=0o700,parents=True,exist_ok=True)
  log=logdir/('setup-'+str(uuid.uuid4())+'.log');log.touch(mode=0o600)
@@ -188,7 +201,7 @@ def main(argv=None):
  with Path('/run/ds-guard-safe-lifecycle.lock').open('w') as lock:
   fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
   if a.mode in ('full','guard'):lifecycle.enable_prepare()
-  lifecycle.begin();rc=1
+  lifecycle.begin(legacy_upgrade=bool(legacy),legacy_cold_boot=bool(legacy and legacy.get('resumed')));rc=1
   try:
    rc=perform(a,info,catalog,kernel,log);return rc
   finally:lifecycle.seal(rc)

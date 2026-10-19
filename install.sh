@@ -4,8 +4,8 @@ umask 077
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
 test -f SHA256SUMS || { echo 'Missing release manifest'; exit 1; }
 sha256sum --strict --check SHA256SUMS >/dev/null
-if [ "${1:-}" = --check ]; then exec python3 preflight.py; fi
-python3 preflight.py || exit 78
+if [ "${1:-}" = --check ]; then exec python3 legacy_context.py; fi
+python3 legacy_context.py || exit 78
 exec 8>/run/ds-guard-safe-launch.lock
 flock -n 8 || { echo 'Another installer is running'; exit 75; }
 for unit in ds-guard-safe-install.service ds-guard-safe-recover.service; do
