@@ -1,0 +1,9 @@
+--- a/src/include/ndpi_typedefs.h
++++ b/src/include/ndpi_typedefs.h
+@@ -762,7 +762,7 @@ struct hash_ip4p_table {
+   int			  ipv6;
+ //  spinlock_t              lock;
+   atomic_t                count;
+-  struct hash_ip4p        tbl[0];
++  struct hash_ip4p        tbl[];
+ };

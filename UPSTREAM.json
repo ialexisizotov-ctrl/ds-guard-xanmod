@@ -1,0 +1,10 @@
+{
+  "vendor_version": "1.7.11",
+  "vendor_binary_sha256": "b82eadbc8000ae5a3e843affac320c9da34aa283c9236ab4a9bb8573362e9fc6",
+  "ndpi_commit": "63880be7697149ce954c91346bbd7b8cb8ea34d0",
+  "ndpi_git_archive_sha256": "211021fab72aadb660085fba9491ac38c7f94a21194b67b0c5c115ac467e22ae",
+  "kernel_commits": {
+    "7.0.12-xanmod1": "945bad56c1ffa8458975c557b855a6d8efef0319",
+    "7.2.9-xanmod1": "bca689d38274338b44a54e3bb198547c8eab8fc0"
+  }
+}

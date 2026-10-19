@@ -1,0 +1,14 @@
+{
+  "src/include/ndpi_typedefs.h": {
+    "original": "8c929a4019a2425069fefebbaea7371442011e8f2799957fabe9388d2069c59e",
+    "patched": "f0a1dd968fe0beb21b2bd8f3e5301d2a3a732728bc796f33c2ddf7b3c7883aff"
+  },
+  "ndpi-netfilter/src/Makefile": {
+    "original": "9d8e3da6a66538e88a075a618ab26cf71749f037f9cf94dfc80fe47a85e3a032",
+    "patched": "05fca0025abd34fd0b7336cfb3a2519abdd7107b7a52c9134323106f46652e06"
+  },
+  "ndpi-netfilter/src/main.c": {
+    "original": "a402513dcf6120e565817575fc49d79c50fb55309ff5e92f620533fc2538ac07",
+    "patched": "1e95173d38fde685dc502d1155a56a76fcb4ad880e42cf2cc87197e1a463893f"
+  }
+}
