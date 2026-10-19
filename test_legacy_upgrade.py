@@ -4,6 +4,7 @@ import hashlib,json,os,tempfile,unittest
 from pathlib import Path
 from unittest.mock import patch
 import legacy_upgrade as legacy
+import activation_guard
 
 KERNEL='7.0.12-x64v2-dsg1-xanmod1'
 BOOT='22222222-2222-2222-2222-222222222222'
@@ -21,7 +22,7 @@ COMMIT
 class LegacyUpgradeTests(unittest.TestCase):
  def setUp(self):
   self.temp=tempfile.TemporaryDirectory(prefix='dsg-legacy-test-');self.base=Path(self.temp.name);self.fs=self.base/'system';self.fs.mkdir();self.root=self.base/'release'
-  self.patches=[patch.object(legacy,'SYSTEM_ROOT',self.fs),patch.object(legacy,'ROOT_UID',os.getuid()),patch.object(legacy.platform,'release',return_value=KERNEL),patch.object(legacy.platform,'machine',return_value='x86_64'),patch.object(legacy,'command',side_effect=self.command),patch.object(legacy.module_identity,'build_note',return_value=b'note'),patch.object(legacy.module_identity,'loaded_matches',side_effect=self.loaded_matches)]
+  self.patches=[patch.object(legacy,'SYSTEM_ROOT',self.fs),patch.object(legacy,'ROOT_UID',os.getuid()),patch.object(legacy.platform,'release',return_value=KERNEL),patch.object(legacy.platform,'machine',return_value='x86_64'),patch.object(legacy,'command',side_effect=self.command),patch.object(legacy.module_identity,'build_note',return_value=b'note'),patch.object(legacy.module_identity,'loaded_matches',side_effect=self.loaded_matches),patch.object(activation_guard,'arm')]
   for p in self.patches:p.start()
   self.disk='/lib/modules/'+KERNEL+'/updates/dkms/xt_ndpi.ko';self.dmesg='';self.logrc=0;self.rules=RULES;self.loaded_ok=False;self.loaded_disk=True;self.calls=[];self.reload_failure=False
   self.write('/etc/os-release','ID=ubuntu\nVERSION_ID="24.04"\n')
@@ -158,6 +159,21 @@ class LegacyUpgradeTests(unittest.TestCase):
   result=legacy.release_hold(self.root)
   self.assertTrue(result['hold_released']);self.assertFalse(result['activation_accepted']);self.assertFalse(any(legacy.path(p).exists() for p in legacy.HOLD_PATHS))
   self.assertEqual(legacy.path(legacy.MARKER).read_text(),legacy.MARKER_TEXT);self.assertEqual(own95.read_text(),'another hold\n')
+
+ def test_durable_fence_is_armed_before_either_old_hold_is_removed(self):
+  self.make_candidate_live();self.baseline();self.rollback_backup()
+  def arm(txn):
+   self.assertEqual(txn,TXN)
+   self.assertTrue(all(legacy.path(p).read_text()==legacy.HOLD_TEXT for p in legacy.HOLD_PATHS))
+  activation_guard.arm.side_effect=arm
+  legacy.release_hold(self.root)
+  activation_guard.arm.assert_called_once_with(TXN)
+
+ def test_failed_durable_fence_keeps_both_old_holds(self):
+  self.make_candidate_live();self.baseline();self.rollback_backup()
+  activation_guard.arm.side_effect=OSError('fixture durable write failure')
+  with self.assertRaisesRegex(OSError,'durable write'):legacy.release_hold(self.root)
+  self.assertTrue(all(legacy.path(p).read_text()==legacy.HOLD_TEXT for p in legacy.HOLD_PATHS))
 
  def test_daemon_reload_failure_restores_both_holds(self):
   self.make_candidate_live();self.baseline();self.rollback_backup();self.reload_failure=True

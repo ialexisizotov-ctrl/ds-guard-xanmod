@@ -105,6 +105,10 @@ def execute(health_command=None):
             save(txn/'acceptance.json',evidence)
             save(STATE/'installed.json',{'kernel':result['kernel'],'module':module,'sha256':sha,'transaction':str(txn),'time':time.time()})
             (txn/'committed').write_text('Local acceptance passed\n')
+            (txn/'committed').chmod(0o600)
+            if legacy:
+                from activation_guard import complete
+                complete(txn)
             (STATE/'pending.json').unlink(missing_ok=True)
             print('SUCCESS: 3/3 local layers verified. Transaction '+str(txn),flush=True)
             settled=True

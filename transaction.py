@@ -41,6 +41,22 @@ def validate_managed_scope(text):
         target=next((tokens[i+1] for i,t in enumerate(tokens[:-1]) if t in ('-j','-g')),None)
         if target in CHAINS and tokens[1] not in CHAINS and not managed_hook(line):raise RuntimeError('Чужое правило использует цепочки ds-guard; автоматическая замена остановлена')
 
+def managed_state(text):
+    """Canonical owned chains/rules and hook positions, excluding counters."""
+    validate_managed_scope(text)
+    table='';chains={};rules={};hooks={};positions=collections.defaultdict(int)
+    for line in text.splitlines():
+        if line.startswith('*'):table=line[1:]
+        if table!='filter':continue
+        if line.startswith(':'):
+            name,policy=line.split()[:2];name=name[1:]
+            if name in CHAINS:chains[name]=policy
+        elif line.startswith('-A '):
+            p=shlex.split(line);chain=p[1];positions[chain]+=1
+            if chain in CHAINS:rules.setdefault(chain,[]).append(p[2:])
+            elif managed_hook(line):hooks.setdefault(chain,[]).append([positions[chain],p[2:]])
+    return {'chains':chains,'rules':rules,'hooks':hooks}
+
 def detach_managed_hooks(execute=run):
     current=execute(['iptables-save']);validate_managed_scope(current)
     foreign=foreign_rules(current);positions=collections.defaultdict(int);removals=[];table=''
@@ -69,6 +85,8 @@ def owned_paths(kernel):
     paths += ['/usr/local/sbin/ds-guard-'+n+'.sh' for n in ['ndpi-lib','ensure','apply','kprep']]
     paths += ['/etc/systemd/system/'+n for n in ['ds-guard.service','ds-guard-apply.service','ds-guard.timer','ds-guard-kprep@.service']]
     paths += ['/etc/systemd/system/'+n+'.d/90-codex-ndpi-memory-hold.conf' for n in ['ds-guard.service','ds-guard-apply.service']]
+    paths += ['/etc/systemd/system/'+n+'.d/98-safe-activation.conf' for n in ['ds-guard.service','ds-guard-apply.service']]
+    paths += ['/var/lib/ds-guard-safe/activation-guard.json']
     paths += ['/etc/kernel/'+n+'/zz-ds-guard' for n in ['postinst.d','header_postinst.d','postrm.d']]
     for pattern in ['/usr/lib/*/xtables/libxt_ndpi.so','/lib/modules/'+kernel+'/updates/dkms/xt_ndpi.ko*']:
         paths.extend(glob.glob(pattern))
@@ -116,30 +134,45 @@ def capture_package_default(txn):
 def rollback(txn):
     if (txn/'committed').exists() or (txn/'rolled-back').exists(): return
     b=json.loads((txn/'before.json').read_text())
-    restore_quarantine_first(txn,b)
+    quarantined=restore_quarantine_first(txn,b)
     run(['systemctl','stop','ds-guard.timer','ds-guard-apply.service','ds-guard.service'],False)
     # Remove only the exact three installer-owned base-hook forms.
     current=run(['iptables-save'])
     foreign_before_rollback=foreign_rules(current)
+    present_chains=set(managed_state(current)['chains'])
+    original_scope=managed_state(b['iptables'])
     detach_managed_hooks(run)
     # Rebuild only seven named installer chains. Never flush INPUT, OUTPUT,
     # FORWARD, Docker, UFW, or another nftables table.
-    for c in CHAINS:
-        run(['iptables','-w','5','-N',c],False);run(['iptables','-w','5','-F',c],False)
-    positions=collections.defaultdict(int)
+    for c in sorted(CHAINS):
+        if c not in present_chains:run(['iptables','-w','5','-N',c])
+        run(['iptables','-w','5','-F',c])
     for line in b['iptables'].splitlines():
         if not line.startswith('-A '): continue
-        p=shlex.split(line);positions[p[1]]+=1
+        p=shlex.split(line)
         if p[1] in CHAINS: run(['iptables','-w','5',*p])
-        elif managed_hook(line): run(['iptables','-w','5','-I',p[1],str(positions[p[1]]),*p[2:]])
     old_chains={l.split()[0][1:] for l in b['iptables'].splitlines() if l.startswith(':')}
-    for c in CHAINS-old_chains:run(['iptables','-w','5','-X',c],False)
+    for c in sorted(CHAINS-old_chains):run(['iptables','-w','5','-X',c])
+    # Reconnect traffic only after all isolated chains are exactly restored.
+    # A successful but ineffective flush (or concurrent writer) must not expose
+    # packets to unaccepted nDPI rules before the final recovery check.
+    isolated=run(['iptables-save'])
+    if managed_state(isolated)!={**original_scope,'hooks':{}} or foreign_rules(isolated)!=foreign_before_rollback:
+        raise RuntimeError('Изолированные цепочки не совпали с исходным состоянием; подключения ds-guard не восстановлены')
+    positions=collections.defaultdict(int)
+    for line in b['iptables'].splitlines():
+        if not line.startswith('-A '):continue
+        p=shlex.split(line);positions[p[1]]+=1
+        if managed_hook(line):run(['iptables','-w','5','-I',p[1],str(positions[p[1]]),*p[2:]])
     # Restore scoped configuration/module files; leave newly installed packages.
     old=set(b['files']); now=set(owned_paths(b['kernel']))
     for name in now-old:
         p=Path(name)
         if p.is_file() or p.is_symlink(): p.unlink()
     for name in old:
+        # Do not truncate the already durable quarantine files while a new
+        # activation fence is being removed by this same rollback.
+        if name in quarantined:continue
         p=Path(name);p.parent.mkdir(parents=True,exist_ok=True)
         if p.is_symlink():p.unlink()
         shutil.copy2(txn/'files'/p.relative_to('/'),p,follow_symlinks=False)
@@ -156,8 +189,11 @@ def rollback(txn):
         elif state['enabled'] not in ('static','indirect','generated','alias'):run(['systemctl','disable',unit],False)
         if state['active']=='active':run(['systemctl','restart',unit],False,timeout=90)
         else:run(['systemctl','stop',unit],False)
-    if foreign_rules(run(['iptables-save']))!=foreign_before_rollback:
+    final_firewall=run(['iptables-save'])
+    if foreign_rules(final_firewall)!=foreign_before_rollback:
         raise RuntimeError('Foreign firewall changed during rollback; independent recovery remains armed')
+    if managed_state(final_firewall)!=original_scope:
+        raise RuntimeError('Собственные цепочки или правила после отката не совпали с исходным состоянием; восстановление не подтверждено')
     for unit,state in b['units'].items():
         if state['active']=='active' and run(['systemctl','is-active',unit],False)!='active':
             raise RuntimeError('Previously active service did not recover: '+unit)
@@ -170,7 +206,7 @@ def restore_quarantine_first(txn,b,root=Path('/')):
     # A failed recovery must never leave an unaccepted service free to boot.
     names=['/etc/systemd/system/'+u+'.d/90-codex-ndpi-memory-hold.conf' for u in ['ds-guard.service','ds-guard-apply.service']]
     body='[Unit]\nConditionPathExists=!/root/codex-dsguard-20261019/ndpi-memory-safety-hold\n'
-    restored=False
+    restored=set()
     for name in names:
         if name not in b['files']:continue
         backup=txn/'files'/name.lstrip('/');dest=root/name.lstrip('/')
@@ -180,8 +216,14 @@ def restore_quarantine_first(txn,b,root=Path('/')):
             dest.parent.mkdir(parents=True,exist_ok=True)
             shutil.copy2(backup,dest);os.chown(dest,backup.stat().st_uid,backup.stat().st_gid)
         if dest.read_text()!=body:raise RuntimeError('Запрет запуска не восстановлен')
-        restored=True
+        dest.chmod(backup.stat().st_mode&0o777)
+        with dest.open('rb') as f:os.fsync(f.fileno())
+        fd=os.open(dest.parent,os.O_RDONLY|os.O_DIRECTORY)
+        try:os.fsync(fd)
+        finally:os.close(fd)
+        restored.add(name)
     if restored:run(['systemctl','daemon-reload'])
+    return restored
 
 if __name__=='__main__':
     if len(sys.argv)!=3 or sys.argv[1] not in ('rollback','capture-package-default'):sys.exit(64)

@@ -162,6 +162,10 @@ def release_hold(root=ROOT,txn=None):
  for p in HOLD_PATHS:
   if str(p) not in files:raise RuntimeError('Запрет отсутствует в резервной копии операции')
   regular(path(txn/'files'/str(p).lstrip('/')),0o644,HOLD_TEXT)
+ # Keep a durable boot fence before removing either existing quarantine file.
+ # It adds its own ExecCondition without clearing any administrator conditions.
+ from activation_guard import arm
+ arm(txn)
  removed=[]
  try:
   for p in HOLD_PATHS:

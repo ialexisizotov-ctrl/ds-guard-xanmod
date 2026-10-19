@@ -69,9 +69,16 @@ def restore_file(name, item, b):
         os.chown(temp, *owner, follow_symlinks=False)
         if not temp.is_symlink():
             temp.chmod(item['mode'])
+            with temp.open('rb') as f:
+                os.fsync(f.fileno())
         if lc.stamp(temp) != item or [temp.lstat().st_uid, temp.lstat().st_gid] != owner:
             raise RuntimeError('Не подтверждена подготовленная копия файла: ' + name)
         temp.replace(p)
+        fd = os.open(p.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
     finally:
         temp.unlink(missing_ok=True)
 
