@@ -7,7 +7,9 @@ remain in HISTORICAL_DSG1_VALIDATION.md and do not approve this candidate.
 The actual original callback reproducibly fails ASan when growing 2048 bytes to
 4096 bytes. The patched callback passed 794 ASan/UBSan cases, including growth,
 shrinkage, calloc overflow, allocation/metadata failures and metadata cleanup.
-Twenty-four compatibility, preservation, selection, restoration and boot-fallback tests pass. The compatibility
+Seventy-three compatibility, preservation, ownership, recovery, package-gate,
+selection, restoration and boot-fallback tests pass, with no skipped tests in
+the isolated root-capable local check. The compatibility
 gate now refuses activation after an existing kernel fault in the current boot.
 
 Modules compile for all four listed kernel/OS pairs. The Ubuntu 22.04 build
@@ -52,6 +54,8 @@ plan, status, disable and removal modes. Kernel selection uses the pinned tested
 catalog, OS, CPU intersection and known loaded-driver exclusions. It does not
 reboot, change the saved boot entry or schedule unattended kernel upgrades.
 
+The following full-install lifecycle observations concern the earlier rc1 code;
+the package and recovery corrections below require separate updated acceptance.
 On an isolated Ubuntu 24.04 VM, fresh full installation and repeated installation
 passed local payload checks. Disable, repeated disable, verified resume and full
 removal preserved the immutable first baseline, original package versions,
@@ -93,3 +97,68 @@ package restoration, boot choice, absence of nDPI and kernel health before
 shutting down the VM. The failed footer receipt is retained.
 
 Machine-readable hashes and bounded results are in VALIDATION_EVIDENCE.json.
+
+## Post-rc1 safety review
+
+Review reproduced package ownership contamination: an administrator's later
+package could enter the global before/after difference and removal plan. Private
+dpkg logs now attribute new installed packages to one operation UUID. An incomplete
+receipt stops lifecycle sealing. Disable retains the previously owned scope;
+sysctl writes require matching worker receipts. Existing APT manual/auto marks
+are preserved, and interrupted disable resumes until restoration is complete.
+
+APT --no-upgrade was independently shown to allow dependency upgrades. An
+invocation-scoped Pre-Install-Pkgs hook now refuses replacement, reinstall or
+architecture changes of any already installed package before dpkg executes.
+The direct dpkg path also checks archives. CLI package timeout is propagated
+to the controller as TimeoutExpired, leaving recovery to systemd after it has
+stopped the worker control group.
+
+A delayed recovery timer was reproduced stopping a newer tuning worker and
+deleting its pending marker. Recovery now checks the exact transaction under a
+state lock, cancels only its own timer and conditionally clears its own pending
+record. Symlinks and foreign recovery units are refused before writes; rollback
+checks saved file ownership as well as content and mode.
+
+These changes do not establish production acceptance. Concurrent administrator
+writes to the same managed file during installation do not yet have complete
+per-writer provenance; drift between operations is refused before mutation.
+Old lifecycle journals without package provenance are refused, not silently
+adopted. The one-command production bootstrap remains disabled.
+
+
+## Isolated rc2 integration acceptance
+
+The updated exact code hashes are recorded in REVIEW2_VALIDATION.json. On the
+isolated Ubuntu 24.04 / custom XanMod 7.0 fixture, actual APT and dpkg installs
+produced separate ownership receipts. A later administrator package survived
+repeat installation, disable and removal. Both direct replacement and an
+indirect dependency upgrade from a private local package repository were
+refused by the real APT hook before dpkg changed the installed version.
+
+Intentional health exit 17 restored the network profile. A delayed recovery
+from that completed transaction left a newer worker PID and pending record
+unchanged; the new worker completed successfully. A 120-second health timeout
+triggered systemd OnFailure recovery, restoring all 15 measured sysctls and
+cancelling the matching fallback timer. The first probe lacked conntrack in
+the empty fixture and stopped before mutation; it is retained separately.
+An initial identity probe used the wrong copy/readiness time ordering; its
+failure is retained alongside a corrected check of the actual package-suite
+copy interval, guest manifest, unchanged code hashes and exact receipt hashes.
+
+Fresh full installation, repeat installation, disable, repeated disable,
+verified resume and removal also passed on that fixture. Three local payload
+rounds checked DNS policy, nDPI matching and Suricata blocking. The immutable
+baseline, original packages/sysctls and boot choice were preserved. Removal
+reported that the loaded livepatch still required a reboot; a separate new
+boot confirmed its absence and no managed firewall hooks or kernel faults.
+
+The updated kernel-only path also prepared custom XanMod 7.2 alongside the
+running custom 7.0 kernel. Two exact kernel packages were attributed, no guard
+was installed, the saved boot entry stayed unchanged and status returned 20.
+Removal restored the original package set. This tests preparation and removal;
+runtime module acceptance on 7.2 remains the separately versioned rc1 evidence.
+
+This is bounded local acceptance, not production or load acceptance. The
+production bootstrap stays disabled pending fresh server checks and review
+of remaining limitations.

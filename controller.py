@@ -16,6 +16,7 @@ def driver(phase,txn):
     with (txn/'driver.log').open('a') as log:
         p=subprocess.run(['bash',str(ROOT/'driver.sh'),phase,str(txn)],stdout=log,stderr=subprocess.STDOUT,
             timeout=1800,env={**os.environ,'DEBIAN_FRONTEND':'noninteractive','NEEDRESTART_SUSPEND':'1'})
+        if (txn/'package-timeout').exists():raise subprocess.TimeoutExpired('package installation',600)
         if p.returncode:raise RuntimeError('Driver '+phase+' failed; see '+str(txn/'driver.log'))
 
 def runtime_check(txn,before):

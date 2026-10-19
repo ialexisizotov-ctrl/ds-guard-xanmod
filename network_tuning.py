@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Scoped VPN sysctl profile; an independent timer restores an unaccepted change."""
-import argparse,base64,fcntl,json,os,re,shutil,subprocess,sys,time,uuid
+import argparse,base64,contextlib,fcntl,json,os,re,shutil,subprocess,sys,time,uuid
 from pathlib import Path
 
 BASE=Path('/var/lib/ds-guard-safe/tuning')
@@ -42,22 +42,56 @@ def valid_txn(p):
  if p.parent!=BASE or not re.fullmatch('[0-9a-f-]+',p.name):raise RuntimeError('Недопустимый путь операции')
  return p
 
+@contextlib.contextmanager
+def state_lock():
+ # Separate from the launch lock: its owner waits for systemd, whose OnFailure
+ # recovery must be able to run. Serialize pending ownership before stopping a
+ # worker, including the short handoff between two consecutive operations.
+ with (BASE/'state.lock').open('a') as lock:
+  fcntl.flock(lock,fcntl.LOCK_EX)
+  yield
+
+def pending_transaction():
+ pending=BASE/'pending.json'
+ return json.loads(pending.read_text()).get('transaction') if pending.exists() else None
+
+def clear_pending(p):
+ # Caller holds state_lock. Never clear the next operation's recovery pointer.
+ if pending_transaction()==str(p):(BASE/'pending.json').unlink()
+
+def stop_timer(p):
+ subprocess.run(['systemctl','stop','ds-guard-tuning-rollback-'+p.name+'.timer'],capture_output=True,timeout=35)
+
+def regular_path(p):
+ # Do not follow either the final symlink or an exchanged parent directory when
+ # writing or restoring root-owned configuration. Missing files are allowed.
+ if p.is_symlink() or any(parent.is_symlink() for parent in p.parents):raise RuntimeError('Обнаружена символическая ссылка вместо файла настройки: '+str(p))
+ if p.exists() and not p.is_file():raise RuntimeError('Ожидался обычный файл настройки: '+str(p))
+
+def lifecycle_operation_id():
+ pending=Path('/var/lib/ds-guard-safe/lifecycle/pending.json')
+ return json.loads(pending.read_text()).get('operation_id') if pending.exists() else None
+
 def rollback(p,force=False):
  p=valid_txn(p)
  if (p/'rolled-back.json').exists() or (p/'accepted.json').exists() and not force:return
  d=json.loads((p/'before.json').read_text())
  if d['boot_id']!=Path('/proc/sys/kernel/random/boot_id').read_text().strip():raise RuntimeError('После перезагрузки нужен отдельный план возврата')
+ for name,item in d['files'].items():
+  regular_path(Path(name))
+  if item is not None and not {'uid','gid'}<=item.keys():raise RuntimeError('В прежнем журнале нет владельца файла; требуется отдельный проверенный возврат: '+name)
  for k,v in d['values'].items():run(['sysctl','-w',k+'='+v])
  for name,item in d['files'].items():
   f=Path(name)
   if item is None:
    if f.exists():f.unlink()
   else:
-   f.parent.mkdir(parents=True,exist_ok=True);f.write_bytes(base64.b64decode(item['data']));f.chmod(item['mode'])
+   f.parent.mkdir(parents=True,exist_ok=True);f.write_bytes(base64.b64decode(item['data']));os.chown(f,item['uid'],item['gid']);f.chmod(item['mode'])
  assert all(norm(run(['sysctl','-n',k]))==norm(v) for k,v in d['values'].items())
  for name,item in d['files'].items():
   f=Path(name);assert not f.exists() if item is None else f.read_bytes()==base64.b64decode(item['data'])
- save(p/'rolled-back.json',{'time':time.time(),'runtime_and_owned_files_restored':True})
+  if item is not None:assert (f.stat().st_mode&0o777,f.stat().st_uid,f.stat().st_gid)==(item['mode'],item['uid'],item['gid'])
+ save(p/'rolled-back.json',{'time':time.time(),'runtime_and_owned_files_restored':True,'values':d['values'],'operation_id':d.get('operation_id')})
  latest=BASE/'current.json'
  if latest.exists() and json.loads(latest.read_text()).get('transaction')==str(p):
   save(latest,{'transaction':str(p),'rolled_back':True,'time':time.time()})
@@ -67,7 +101,8 @@ def execute(health_command=None):
  container=subprocess.run(['systemd-detect-virt','--container'],capture_output=True,text=True)
  if container.returncode==0:raise RuntimeError('Контейнер или WSL не поддерживается')
  for f in FILES:
-  if f.is_symlink() or f.exists() and not f.read_text().startswith(MARKER):raise RuntimeError('Существующий файл не принадлежит установщику: '+str(f))
+  regular_path(f)
+  if f.exists() and not f.read_text().startswith(MARKER):raise RuntimeError('Существующий файл не принадлежит установщику: '+str(f))
  for command in ['sysctl','ip','tc','ss','iptables-save','systemd-run','curl','modprobe']:
   if not shutil.which(command):raise RuntimeError('Не найдена обязательная команда: '+command)
  if re.search(r'BUG:|UBSAN:|Oops:|WARNING: CPU|Kernel panic|Out of memory',run(['dmesg'])):raise RuntimeError('В текущей загрузке есть ошибки ядра')
@@ -79,11 +114,13 @@ def execute(health_command=None):
   current={k:norm(run(['sysctl','-n',k])) for k in KEYS}
   ram=int(re.search(r'^MemTotal:\s+(\d+)',Path('/proc/meminfo').read_text(),re.M)[1])//1024
   values=desired_values(current,ram)
-  before={'boot_id':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'values':current,'network':network_state(),
-          'files':{str(f):None if not f.exists() else {'data':base64.b64encode(f.read_bytes()).decode(),'mode':f.stat().st_mode&0o777} for f in FILES}}
+  before={'boot_id':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'values':current,'requested_values':values,'operation_id':lifecycle_operation_id(),'started':time.time(),'network':network_state(),
+          'files':{str(f):None if not f.exists() else {'data':base64.b64encode(f.read_bytes()).decode(),'mode':f.stat().st_mode&0o777,'uid':f.stat().st_uid,'gid':f.stat().st_gid} for f in FILES}}
   p=BASE/str(uuid.uuid4());p.mkdir(mode=0o700);save(p/'before.json',before);shutil.copy2(__file__,p/'network_tuning.py')
   timer='ds-guard-tuning-rollback-'+p.name
-  save(BASE/'pending.json',{'transaction':str(p)})
+  with state_lock():
+   if pending_transaction() is not None:raise RuntimeError('Предыдущая настройка сети ещё требует восстановления')
+   save(BASE/'pending.json',{'transaction':str(p)})
   run(['systemd-run','--unit='+timer,'--on-active=5m','/usr/bin/python3',str(p/'network_tuning.py'),'--recover',str(p)])
   settled=False
   try:
@@ -101,7 +138,7 @@ def execute(health_command=None):
    if health_command:run(['/bin/bash','-c',health_command],timeout=120)
    if re.search(r'BUG:|UBSAN:|Oops:|WARNING: CPU|Kernel panic|Out of memory',run(['dmesg'])):raise RuntimeError('После настройки обнаружена ошибка ядра')
    assert before['boot_id']==Path('/proc/sys/kernel/random/boot_id').read_text().strip()
-   result={'transaction':str(p),'values':values,'network_preserved':True,'strict_https':True,'operator_health_checked':bool(health_command),'hashsize_live':live_hash,'hashsize_after_reboot':future_hash,'reboot_required_for_hashsize':live_hash!=future_hash,'kernel':os.uname().release,'time':time.time()}
+   result={'transaction':str(p),'values':values,'operation_id':before['operation_id'],'network_preserved':True,'strict_https':True,'operator_health_checked':bool(health_command),'hashsize_live':live_hash,'hashsize_after_reboot':future_hash,'reboot_required_for_hashsize':live_hash!=future_hash,'kernel':os.uname().release,'time':time.time()}
    save(p/'accepted.json',result);save(BASE/'current.json',result);settled=True
    print('Сетевой профиль применён и проверен. Ограничители скорости, маршруты и firewall сохранены.')
    if live_hash!=future_hash:print('Размер хеш-таблицы conntrack подготовлен для следующей отдельной перезагрузки.')
@@ -114,36 +151,52 @@ def execute(health_command=None):
    rollback(p);settled=True;raise
   finally:
    if settled:
-    subprocess.run(['systemctl','stop',timer+'.timer'],capture_output=True)
-    (BASE/'pending.json').unlink(missing_ok=True)
+    stop_timer(p)
+    with state_lock():clear_pending(p)
 
 def recover(p=None):
- # Stop the entire bounded worker before restoring settings, including a hung
- # health command. Do not wait on its launcher's lock while systemd waits for us.
- subprocess.run(['systemctl','stop','ds-guard-safe-tune.service'],capture_output=True,timeout=35)
- if p is None:
-  pending=BASE/'pending.json'
-  if not pending.exists():return
-  p=json.loads(pending.read_text())['transaction']
- p=valid_txn(p)
- with (BASE/'lock').open('w') as lock:
-  fcntl.flock(lock,fcntl.LOCK_EX);rollback(p)
- if (p/'rolled-back.json').exists() or (p/'accepted.json').exists():(BASE/'pending.json').unlink(missing_ok=True)
+ # A delayed timer from an earlier operation must not stop the current worker.
+ # Keep ownership stable until the old worker's cgroup is stopped and restored;
+ # launch and worker completion use this same short state lock.
+ with state_lock():
+  pending=pending_transaction()
+  if p is None:
+   if pending is None:return
+   p=pending
+  p=valid_txn(p)
+  terminal=(p/'rolled-back.json').exists() or (p/'accepted.json').exists()
+  if terminal:
+   stop_timer(p);clear_pending(p);return
+  if pending!=str(p):raise RuntimeError('Операция восстановления не совпадает с текущей настройкой сети; работающий процесс не остановлен')
+  stopped=subprocess.run(['systemctl','stop','ds-guard-safe-tune.service'],capture_output=True,timeout=35)
+  if stopped.returncode:raise RuntimeError('Не удалось остановить рабочий процесс настройки сети; восстановление не начато')
+  with (BASE/'lock').open('w') as lock:
+   fcntl.flock(lock,fcntl.LOCK_EX);rollback(p)
+  if (p/'rolled-back.json').exists() or (p/'accepted.json').exists():
+   stop_timer(p);clear_pending(p)
 
 def launch(health_command=None):
  BASE.mkdir(parents=True,mode=0o700,exist_ok=True)
+ with state_lock():args=prepare_launch(health_command)
+ return subprocess.run(args).returncode
+
+def prepare_launch(health_command=None):
  for u in ['ds-guard-safe-install','ds-guard-safe-recover','ds-guard-safe-kernel-stage','ds-guard-safe-kernel-cleanup','ds-guard-safe-tune','ds-guard-safe-tune-recover']:
   state=subprocess.run(['systemctl','show',u+'.service','-p','ActiveState','--value'],capture_output=True,text=True).stdout.strip()
   if state in ('active','activating','deactivating'):raise RuntimeError('Уже выполняется установка или восстановление')
  if (BASE/'pending.json').exists():raise RuntimeError('Сначала завершите восстановление предыдущей настройки сети')
- helper=BASE/'network_tuning.py';shutil.copy2(__file__,helper)
+ helper=BASE/'network_tuning.py'
  unit=Path('/etc/systemd/system/ds-guard-safe-tune-recover.service')
- unit.write_text('[Unit]\nDescription=Restore interrupted ds-guard network tuning\n[Service]\nType=oneshot\nExecStart=/usr/bin/python3 '+str(helper)+' --recover-current\nTimeoutStartSec=120\n')
+ unit_text='[Unit]\nDescription=Restore interrupted ds-guard network tuning\n[Service]\nType=oneshot\nExecStart=/usr/bin/python3 '+str(helper)+' --recover-current\nTimeoutStartSec=120\n'
+ regular_path(helper);regular_path(unit)
+ if unit.exists() and unit.read_text()!=unit_text:raise RuntimeError('Существующая служба восстановления не принадлежит установщику: '+str(unit))
+ if helper.exists() and not helper.read_text().startswith('#!/usr/bin/env python3\n"""Scoped VPN sysctl profile; an independent timer restores an unaccepted change."""\n'):raise RuntimeError('Существующий файл восстановления не принадлежит установщику: '+str(helper))
+ shutil.copy2(__file__,helper);unit.write_text(unit_text)
  unit.chmod(0o644);run(['systemctl','daemon-reload'])
  subprocess.run(['systemctl','reset-failed','ds-guard-safe-tune.service'],capture_output=True)
  args=['systemd-run','--unit=ds-guard-safe-tune','--wait','--collect','--property=Type=oneshot','--property=TimeoutStartSec=240','--property=TimeoutStopSec=15','--property=KillMode=control-group','--property=OnFailure=ds-guard-safe-tune-recover.service','/usr/bin/python3',str(helper),'--worker']
  if health_command:args+=['--health-command',health_command]
- return subprocess.run(args).returncode
+ return args
 
 if __name__=='__main__':
  a=argparse.ArgumentParser(description='Настройка сети VPN с проверкой и возвратом прежних значений')

@@ -47,7 +47,7 @@ class RestoreOwnership(unittest.TestCase):
   now={**a,'file_owners':{'/owned':[1,1]}}
   with self.assertRaisesRegex(RuntimeError,'владелец'):lifecycle.verify_no_conflict(b,a,now)
  def test_kernel_only_disable_does_not_touch_unrelated_services_or_files(self):
-  b={'files':{},'values':{},'packages':{},'iptables':''};a=dict(b)
+  b={'files':{},'file_owners':{},'values':{},'packages':{},'iptables':'','manual':[],'units':{},'ownership_schema':1,'owned_packages':{}};a=dict(b)
   with tempfile.TemporaryDirectory() as d, patch.object(lifecycle,'STATE',Path(d)),patch.object(lifecycle,'read_records',return_value=(b,a)),patch.object(lifecycle,'snapshot',return_value=a),patch.object(lifecycle,'run') as run,patch.object(lifecycle,'restore_file') as restore:
    self.assertEqual(lifecycle.disable(),0)
    run.assert_not_called();restore.assert_not_called()

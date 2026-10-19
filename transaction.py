@@ -62,6 +62,11 @@ def begin(txn):
       'kernel_log':run(['dmesg']), 'loaded':Path('/sys/module/xt_ndpi').exists(),
       'module_before':run(['modinfo','-n','xt_ndpi'],False),
       'started':time.time(),'phase':'prepared'}
+    pending=Path('/var/lib/ds-guard-safe/lifecycle/pending.json')
+    if pending.is_symlink():raise RuntimeError('Журнал операции является ссылкой')
+    operation_id=json.loads(pending.read_text()).get('operation_id') if pending.exists() else None
+    if operation_id is not None and not re.fullmatch('[0-9a-f-]{36}',operation_id):raise RuntimeError('Некорректный идентификатор операции')
+    data.update(operation_id=operation_id,requested_values={'net.netfilter.nf_conntrack_acct':'1'})
     save(txn/'before.json',data);return data
 
 def valid_txn(arg):

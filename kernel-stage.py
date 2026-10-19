@@ -2,6 +2,7 @@
 """Stage an exact kernel alongside the current one. No reboot or boot selection."""
 import argparse, fcntl, hashlib, json, os, platform, re, shutil, subprocess, sys
 from pathlib import Path
+from package_transactions import execute as install_packages
 
 ROOT=Path(__file__).resolve().parent
 STATE=Path('/var/lib/ds-guard-safe/kernel')
@@ -92,11 +93,12 @@ def main():
    for item in packages:
     version=run(['dpkg-deb','-f',str(a.directory/item['filename']),'Version'])
     status=run(['dpkg-query','-W','-f=${db:Status-Status} ${Version}',item['package']],check=False)
+    if status.startswith('installed ') and status!='installed '+version:raise RuntimeError('Уже установлена другая версия пакета ядра: '+item['package'])
     if status!='installed '+version:required.append(str((a.directory/item['filename']).resolve()))
    if required:
     with log.open('a') as out:
      command=['apt-get','-y','--no-remove','--no-upgrade','-o','DPkg::Lock::Timeout=120','install',*required] if m.get('kind')=='ubuntu' else ['dpkg','-i',*required]
-     subprocess.run(command,check=True,stdout=out,stderr=subprocess.STDOUT,timeout=900,env={**os.environ,'DEBIAN_FRONTEND':'noninteractive','NEEDRESTART_SUSPEND':'1'})
+     if install_packages(command,timeout=900,stdout=out):raise RuntimeError('Не удалось установить все пакеты ядра; см. отдельный журнал происхождения пакетов')
    dest=Path('/lib/modules')/a.kernel/'updates/dkms'
    if not a.kernel_only:
     dest.mkdir(parents=True,exist_ok=True)

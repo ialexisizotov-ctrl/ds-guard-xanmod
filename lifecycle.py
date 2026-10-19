@@ -55,6 +55,47 @@ def packages():
  rows=run(['dpkg-query','-W','-f=${binary:Package}\t${db:Status-Status}\t${Version}\n']).splitlines()
  return {r.split('\t')[0]:r.split('\t')[2] for r in rows if len(r.split('\t'))==3 and r.split('\t')[1]=='installed'}
 
+def recorded_package_ownership(record):
+ # A global package difference is not provenance: administrators and automatic
+ # updates may add unrelated packages between or during installer operations.
+ if record.get('ownership_schema')!=1 or not isinstance(record.get('owned_packages'),dict):
+  raise RuntimeError('В прежнем журнале нет доказанного происхождения пакетов. Автоматическое удаление или продолжение установки остановлено; нужен отдельный проверенный перенос журнала.')
+ owned=record['owned_packages']
+ if any(not isinstance(p,str) or not isinstance(v,str) or not p or not v for p,v in owned.items()):
+  raise RuntimeError('Повреждён журнал происхождения пакетов')
+ return dict(owned)
+
+def package_ownership(installed):
+ after=STATE/'after.json'
+ if after.exists():owned=recorded_package_ownership(json.loads(after.read_text()))
+ elif (STATE/'before.json').exists():raise RuntimeError('Не найден итоговый журнал происхождения пакетов')
+ else:owned={}
+ pending=STATE/'pending.json'
+ if not pending.exists():return owned
+ operation=json.loads(pending.read_text())
+ operation_id=operation.get('operation_id')
+ if not isinstance(operation_id,str) or not re.fullmatch('[0-9a-f-]{36}',operation_id) or not isinstance(operation.get('packages_before'),dict):
+  raise RuntimeError('Незавершённая операция не содержит проверяемого журнала происхождения пакетов')
+ receipts=STATE/'package-receipts'
+ if receipts.is_symlink():raise RuntimeError('Каталог подтверждений пакетов является ссылкой')
+ for p in sorted(receipts.glob('*.json')):
+  if p.is_symlink():raise RuntimeError('Подтверждение пакетов является ссылкой')
+  receipt=json.loads(p.read_text())
+  if receipt.get('operation_id')!=operation_id:continue
+  if receipt.get('schema')!=1 or receipt.get('completed') is not True or not isinstance(receipt.get('returncode'),int) or not isinstance(receipt.get('installed'),dict):
+   raise RuntimeError('Пакетная операция не завершена или её происхождение не подтверждено: '+p.name)
+  for pkg,version in receipt['installed'].items():
+   if not isinstance(pkg,str) or not isinstance(version,str) or not pkg or not version:
+    raise RuntimeError('Повреждено подтверждение установленного пакета: '+p.name)
+   if pkg in operation['packages_before']:
+    raise RuntimeError('Подтверждение ошибочно присваивает ранее существовавший пакет: '+pkg)
+   if installed.get(pkg)!=version:
+    raise RuntimeError('После собственной пакетной операции версия изменилась или пакет не установлен: '+pkg)
+   if pkg in owned and owned[pkg]!=version:
+    raise RuntimeError('Изменилась доказанная версия собственного пакета: '+pkg)
+   owned[pkg]=version
+ return owned
+
 def units():return {u:{'active':run(['systemctl','is-active',u],False),'enabled':run(['systemctl','is-enabled',u],False)} for u in UNITS}
 
 def values():
@@ -66,16 +107,15 @@ def values():
  return result
 
 def snapshot():
- installed=packages();names=set(paths())
+ installed=packages();owned=package_ownership(installed);names=set(paths())
  if (STATE/'before.json').exists():
-  initial=json.loads((STATE/'before.json').read_text())['packages']
-  for pkg in set(installed)-set(initial):
+  for pkg in set(installed)&set(owned):
    for line in run(['dpkg-query','-W','-f=${Conffiles}',pkg]).splitlines():
     fields=line.split()
     if fields and fields[0].startswith('/'):names.add(fields[0])
   if (STATE/'after.json').exists():names.update(json.loads((STATE/'after.json').read_text())['files'])
  owners={p:[Path(p).lstat().st_uid,Path(p).lstat().st_gid] for p in names if Path(p).is_file() or Path(p).is_symlink()}
- return {'files':{p:stamp(p) for p in sorted(names)},'file_owners':owners,'packages':installed,'manual':run(['apt-mark','showmanual']).splitlines(),
+ return {'files':{p:stamp(p) for p in sorted(names)},'file_owners':owners,'packages':installed,'ownership_schema':1,'owned_packages':owned,'manual':run(['apt-mark','showmanual']).splitlines(),
   'units':units(),'values':values(),'iptables':run(['iptables-save']),'kernel':os.uname().release,
   'module_state':{n:Path('/sys/module',n).exists() for n in ['xt_ndpi','tcp_bbr','nf_conntrack']},
   'conntrack_hashsize':Path('/sys/module/nf_conntrack/parameters/hashsize').read_text().strip() if Path('/sys/module/nf_conntrack/parameters/hashsize').exists() else None,'time':time.time()}
@@ -99,6 +139,7 @@ def begin():
   STATE.rename(STATE.with_name('lifecycle-archive-'+str(uuid.uuid4())))
   STATE.mkdir(mode=0o700)
  if (STATE/'pending.json').exists():raise RuntimeError('Предыдущая операция не завершена; нужен просмотр журнала перед повторным запуском')
+ if (STATE/'after.json').exists():recorded_package_ownership(json.loads((STATE/'after.json').read_text()))
  if not (STATE/'before.json').exists():
   # Old installs have no reliable pre-install image. Never pretend an adoption
   # snapshot could remove changes made before this installer was introduced.
@@ -113,7 +154,10 @@ def begin():
    if item is None:continue
    target=STATE/'files'/name.lstrip('/');target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(name,target,follow_symlinks=False)
   save(STATE/'before.json',d);save(STATE/'after.json',d)
- save(STATE/'pending.json',{'started':time.time(),'boot_id':Path('/proc/sys/kernel/random/boot_id').read_text().strip()})
+  current=d
+ else:
+  b,a=read_records();current=snapshot();verify_repeat_baseline(b,a,current)
+ save(STATE/'pending.json',{'started':time.time(),'boot_id':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'operation_id':str(uuid.uuid4()),'packages_before':current['packages'],'metadata_before':{k:current[k] for k in ['files','file_owners','values','units','manual']}})
 
 def seal(rc):
  if not (STATE/'pending.json').exists():return
@@ -124,21 +168,28 @@ def seal(rc):
   if time.monotonic()>deadline:raise RuntimeError('Рабочий процесс или восстановление ещё выполняется. Исходный журнал сохранён; повторную установку не запускайте.')
   if time.monotonic()>notice:print('[ВОССТАНОВЛЕНИЕ] Ожидание завершения рабочего процесса перед записью результата.',flush=True);notice=time.monotonic()+20
   time.sleep(2)
+ operation=json.loads((STATE/'pending.json').read_text())
+ if not isinstance(operation.get('metadata_before'),dict):raise RuntimeError('Нет исходных метаданных незавершённой операции; требуется отдельное восстановление')
  initial=json.loads((STATE/'before.json').read_text());loaded_path=STATE/'first-loaded-values.json'
  loaded=json.loads(loaded_path.read_text()) if loaded_path.exists() else {}
- started=initial['time']
  # These are measurements made before the first mutation, not kernel defaults
  # guessed during uninstall. The immutable original snapshot stays unchanged.
- for p in sorted(Path('/var/lib/ds-guard-safe/transactions').glob('*/before.json'),key=lambda p:p.stat().st_mtime):
+ for p in sorted((STATE.parent/'transactions').glob('*/before.json'),key=lambda p:p.stat().st_mtime):
   d=json.loads(p.read_text())
-  if d.get('started',0)>=started and d.get('acct') in ('0','1') and 'net.netfilter.nf_conntrack_acct' not in initial['values']:
+  if d.get('operation_id')==operation['operation_id'] and d.get('acct') in ('0','1') and 'net.netfilter.nf_conntrack_acct' not in initial['values']:
    loaded.setdefault('net.netfilter.nf_conntrack_acct',d['acct'])
- for p in sorted(Path('/var/lib/ds-guard-safe/tuning').glob('*/before.json'),key=lambda p:p.stat().st_mtime):
-  if p.stat().st_mtime>=started:
-   for k,v in json.loads(p.read_text())['values'].items():
+ for p in sorted((STATE.parent/'tuning').glob('*/before.json'),key=lambda p:p.stat().st_mtime):
+  d=json.loads(p.read_text())
+  if d.get('operation_id')==operation['operation_id']:
+   for k,v in d['values'].items():
     if k not in initial['values']:loaded.setdefault(k,v)
+ previous=json.loads((STATE/'after.json').read_text());current=snapshot()
+ current['values']=sealed_values(operation,previous['values'],current['values'])
+ # Existing APT marks are not attributed by package install receipts. The
+ # package wrappers request only absent packages; never rewrite foreign marks.
+ current['manual']=previous['manual']
  save(loaded_path,loaded)
- save(STATE/'after.json',snapshot());save(STATE/'last-operation.json',{'exit_code':rc,'time':time.time()})
+ save(STATE/'after.json',current);save(STATE/'last-operation.json',{'exit_code':rc,'time':time.time()})
  (STATE/'pending.json').unlink()
 
 def read_records():
@@ -147,7 +198,8 @@ def read_records():
  b=json.loads((STATE/'before.json').read_text())
  if (STATE/'first-loaded-values.json').exists():
   for k,v in json.loads((STATE/'first-loaded-values.json').read_text()).items():b['values'].setdefault(k,v)
- return b,json.loads((STATE/'after.json').read_text())
+ a=json.loads((STATE/'after.json').read_text());recorded_package_ownership(a)
+ return b,a
 
 def restore_file(name,item):
  p=Path(name)
@@ -180,6 +232,74 @@ def verify_no_conflict(b,a,actual):
  if owned_rules(actual['iptables']) not in (owned_rules(a['iptables']),owned_rules(b['iptables'])):
   raise RuntimeError('Собственные цепочки фильтрации изменились после установки. Нужна проверка их текущего владельца.')
 
+def verify_repeat_baseline(b,a,current):
+ verify_no_conflict(b,a,current)
+ # Do not adopt changes made while the installer was idle. A future explicit
+ # migration can preserve a new first-touch baseline; this version refuses it.
+ owned=changed_owned(b,a)
+ changed=changed_owned(a,current)-owned
+ if changed:raise RuntimeError('Между запусками изменены файлы вне области установки; требуется отдельный перенос исходного состояния: '+', '.join(sorted(changed)[:8]))
+ for key in set(a['values'])|set(current['values']):
+  if key not in b['values'] and key not in a['values']:continue
+  if b['values'].get(key)==a['values'].get(key) and current['values'].get(key)!=a['values'].get(key):
+   raise RuntimeError('Между запусками изменён сетевой параметр вне области установки: '+key)
+
+def preserved_disable_snapshot(b,a,current,guard):
+ result=dict(current);owned=changed_owned(b,a)
+ if guard:owned|={str(HOLD),str(APPLY_HOLD)}
+ result['files']=dict(a['files']);result['file_owners']=dict(a.get('file_owners',{}))
+ for name in owned:
+  result['files'][name]=current['files'].get(name)
+  if name in current.get('file_owners',{}):result['file_owners'][name]=current['file_owners'][name]
+  else:result['file_owners'].pop(name,None)
+ result['values']=dict(a['values'])
+ for key in set(b['values'])|set(a['values']):
+  if b['values'].get(key)!=a['values'].get(key):
+   if key in current['values']:result['values'][key]=current['values'][key]
+   else:result['values'].pop(key,None)
+ result['manual']=a['manual']
+ if not guard:result['units']=a['units']
+ return result
+
+def sealed_values(operation,previous,current):
+ operation_id=operation['operation_id'];receipts=[]
+ base=STATE.parent
+ for p in (base/'tuning').glob('*/before.json'):
+  d=json.loads(p.read_text())
+  if d.get('operation_id')!=operation_id:continue
+  accepted=p.parent/'accepted.json';restored=p.parent/'rolled-back.json'
+  if restored.exists():out=json.loads(restored.read_text())
+  elif accepted.exists():out=json.loads(accepted.read_text())
+  else:raise RuntimeError('Настройка сети не имеет завершённого подтверждения или возврата')
+  if out.get('operation_id')!=operation_id or not isinstance(d.get('requested_values'),dict) or not isinstance(out.get('values'),dict):
+   raise RuntimeError('Не подтверждено происхождение сетевых параметров')
+  keys=set(d['requested_values'])
+  if set(d['values'])!=keys or set(out['values'])!=keys:raise RuntimeError('Состав подтверждения сетевых параметров не совпал')
+  receipts.append((d['started'],d['values'],out['values']))
+ for p in (base/'transactions').glob('*/before.json'):
+  d=json.loads(p.read_text())
+  if d.get('operation_id')!=operation_id:continue
+  key='net.netfilter.nf_conntrack_acct'
+  if d.get('acct') not in ('0','1'):continue
+  before={key:d['acct']}
+  if (p.parent/'acceptance.json').exists() and (p.parent/'committed').exists():
+   if d.get('requested_values')!={key:'1'}:raise RuntimeError('Не подтверждено изменение учёта conntrack')
+   after={key:'1'}
+  elif (p.parent/'rolled-back').exists() or (p.parent/'committed').exists():after=before
+  else:raise RuntimeError('Изменение conntrack не завершено и не восстановлено')
+  receipts.append((d['started'],before,after))
+ start=operation['metadata_before']['values'];expected={};observed=dict(start)
+ for _,before,after in sorted(receipts,key=lambda x:x[0]):
+  for key,value in before.items():
+   if key in observed and observed[key]!=value:raise RuntimeError('Параметр изменился вне подтверждённой операции: '+key)
+  observed.update(after);expected.update(after)
+ for key,value in expected.items():
+  if current.get(key)!=value:raise RuntimeError('Фактический параметр не совпал с подтверждением операции: '+key)
+ for key,value in start.items():
+  if current.get(key)!=value and key not in expected:raise RuntimeError('Изменение сетевого параметра не имеет подтверждённого происхождения: '+key)
+ # Newly visible defaults of a loaded module are not installer-owned writes.
+ return {**previous,**expected}
+
 def detach_rules():
  before=run(['iptables-save']);foreign=foreign_rules(before)
  for line in before.splitlines():
@@ -199,7 +319,7 @@ def runtime_reboot_needed(b):
 
 def disable():
  b,a=read_records();now=snapshot();verify_no_conflict(b,a,now)
- if (STATE/'disabled').exists():print('[ОТКЛЮЧЕНО] Повторное отключение не требуется.');return 0
+ if (STATE/'disabled').exists() and (STATE/'disabled-complete.json').exists():print('[ОТКЛЮЧЕНО] Повторное отключение не требуется.');return 0
  guard=guard_changed(b,a)
  if guard and any(managed_hook(l) for l in b['iptables'].splitlines()):raise RuntimeError('В исходном состоянии уже есть ds-guard; отключение требует отдельного плана сохранения прежней защиты')
  if guard:
@@ -225,7 +345,8 @@ def disable():
  for k,v in b['values'].items():
   if a['values'].get(k)!=v:run(['sysctl','-w',k+'='+v])
  if guard:assert not any(managed_hook(l) for l in run(['iptables-save']).splitlines())
- save(STATE/'after.json',snapshot())
+ save(STATE/'after.json',preserved_disable_snapshot(b,a,snapshot(),guard))
+ save(STATE/'disabled-complete.json',{'time':time.time(),'restoration_completed':True})
  print('[ОТКЛЮЧЕНО] '+('Фильтрация и её автозапуск остановлены; исходные сетевые значения восстановлены.' if guard else 'Собственный сетевой профиль отменён. Фильтрация не входила в эту установку.')+' Для возврата ядра используйте удаление с отдельной загрузкой прежнего ядра.')
  if runtime_reboot_needed(b):print('[НУЖНА ПЕРЕЗАГРУЗКА] Для полного возврата состава загруженных модулей или размера хеш-таблицы conntrack требуется отдельная плановая перезагрузка.')
  return 0
@@ -234,16 +355,18 @@ def enable_prepare():
  # Re-enable is the normal verified install path. Merely starting services
  # would skip identity checks, health acceptance and rollback protection.
  if not (STATE/'disabled').exists():return
+ if not (STATE/'disabled-complete.json').exists():raise RuntimeError('Отключение не завершено. Сначала повторите отключение и дождитесь подтверждённого восстановления.')
  b,a=read_records();verify_no_conflict(b,a,snapshot())
  for p in [HOLD,APPLY_HOLD]:
   if p.exists() and p.read_text()!=HOLD_TEXT:raise RuntimeError('Изменён запрет автозапуска: '+str(p))
  for p in [HOLD,APPLY_HOLD]:p.unlink(missing_ok=True)
- (STATE/'disabled').unlink();run(['systemctl','daemon-reload'])
+ (STATE/'disabled').unlink();(STATE/'disabled-complete.json').unlink();run(['systemctl','daemon-reload'])
 
 def removal_plan():
  if run(['dpkg','--audit']):raise RuntimeError('Есть незавершённая операция пакетного менеджера. Сначала требуется её восстановление.')
  b,a=read_records();now=snapshot();verify_no_conflict(b,a,now)
- owned={p:v for p,v in a['packages'].items() if p not in b['packages']}
+ owned=recorded_package_ownership(a)
+ if set(owned)&set(b['packages']):raise RuntimeError('Журнал ошибочно присваивает исходные пакеты системы')
  for p,v in owned.items():
   if p in now['packages'] and now['packages'][p]!=v:raise RuntimeError('Пакет обновлён после установки: '+p)
  for path in changed_files(b['files'],a['files']):
@@ -295,10 +418,8 @@ def remove(plan=False):
   if state['active']=='active':run(['systemctl','restart',u])
   else:run(['systemctl','stop',u],False)
  remaining=packages()
- initial_manual=set(b['manual']);after_manual=set(a['manual']);live_manual=set(run(['apt-mark','showmanual']).splitlines())
- for pkg in (initial_manual^after_manual)&set(remaining):
-  if (pkg in live_manual)!=(pkg in after_manual):raise RuntimeError('После установки изменена отметка APT: '+pkg)
-  run(['apt-mark','manual' if pkg in initial_manual else 'auto',pkg])
+ # The current writer installs only missing packages. Existing manual/auto
+ # marks have no installer provenance and must remain as the administrator set.
  if set(pkgs)&set(remaining):raise RuntimeError('Некоторые пакеты не удалены')
  if run(['dpkg','--audit']):raise RuntimeError('Пакетный менеджер не подтвердил завершение удаления')
  for pkg in pkgs:
@@ -307,6 +428,7 @@ def remove(plan=False):
  for name in changes:
   if stamp(name)!=b['files'].get(name):raise RuntimeError('Файл не восстановлен: '+name)
  (STATE/'disabled').unlink(missing_ok=True)
+ (STATE/'disabled-complete.json').unlink(missing_ok=True)
  archive=STATE/'removed-metadata';archive.mkdir(mode=0o700,exist_ok=True)
  for name in ['installed.json','pending.json','current.json']:
   p=STATE.parent/name

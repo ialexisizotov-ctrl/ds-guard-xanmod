@@ -1,0 +1,195 @@
+{
+  "schema": 1,
+  "candidate": "v1.7.11-dsg2-rc2",
+  "time": 1792426047.0736809,
+  "local_validation": {
+    "time": 1792423746.6048007,
+    "unit_tests": 73,
+    "unit_failures": 0,
+    "unit_skips": 0,
+    "python_files_compiled": 25,
+    "shell_files_syntax_checked": 9,
+    "code_sha256": {
+      "controller.py": "40d0efd882924d729dc7dad6cdb1dbfa8fa1a89b68514f4a888991a4768e4db9",
+      "install_prebuilt.py": "e870f8159150900c6c9061295ad09de7a9694fcb7d8bf1d236579962c8d20816",
+      "kernel-stage.py": "68c2ba65accd621128473fa9d8c0d53c952f8db5e2137870405fad707357036d",
+      "lifecycle.py": "093a31b7724ed860d5734e573c13a8f421819e11d5664bb0a880503617f6e262",
+      "module_identity.py": "257ff6c36514dbfffe46e7e42064c442d90a8a48b653679e1d2ebf8e474c0213",
+      "network_tuning.py": "e6e90874bc98733d1ff626c5d93fc2abf2c2bc3ee5b6736371e6c5950dfa675d",
+      "package_install_gate.py": "e87857aa6e092e9f9c93bb8d58c0df53e2c5152f1dacaf3c8889aa1cce840d29",
+      "package_transactions.py": "9bda12f00abc67c38eb397b16e00c0c9d16bdb9c4d64b8599533171a65aadf50",
+      "patch_sources.py": "fc867eb21d6f72812449ff024ee0f3262329980d28ebeba1e23aff8deee5682c",
+      "preflight.py": "8b1aa5288df82d7161810ed1b25ae811bba4f1b7bda5686342a2e63e368cf5ed",
+      "recover.py": "c28526a6cf55370647113e546a8f7c5f724cfda75d0d0326f3d4fc8a2a36aa84",
+      "run_worker.py": "b940f26b0f68e10859950893576087b470b1d72ea540491ce29dbd7e59278ee3",
+      "setup_ru.py": "ecb9b95262672ccf7fd1ce4afdfdb898ad1c7dd24de37e83046cccc54757916b",
+      "test_allocator.py": "ae5d1a7eb85f6512e40157a0e30ae18988dd4d4c4da822bc75e66c577e24f9d4",
+      "test_compat72_copy.py": "ad76ddf184c85bb8f9d2242e3c73a7114f56d746954c8d4d8d91125e2cd95f54",
+      "test_hostname_bounds.py": "14f5b81b2067fc30425c84df320fcfc517c8f8cfa9b856f36a78d754cc5340d0",
+      "test_lifecycle_ownership.py": "cc410abc86254aad09b1bbdb9b61987019ee7da9152d15206ccf2262e73c151c",
+      "test_listeners.py": "35f047308b3176732631402808822e09274af9c37645d4edad257d096c595adb",
+      "test_network_recovery.py": "c39a9df325931d3b7917c37b534b0ffd505f598a7d4c0db48b84563af6cedf06",
+      "test_package_install_gate.py": "74d3eb23a101072f285c44f2f444e6c7fce340bd909e99713e8f2ed3cd91d86e",
+      "test_package_transactions.py": "38414d1efd8863aed92f2b8538243c03a6fae3de7847e47dfc6f5a5501910d04",
+      "test_preflight.py": "fbcdfe4fface485e3a8c89b823e0ed5a9bd58615771755fe5abebf5d026b768f",
+      "test_setup_lifecycle.py": "cb5ddf8481e65cf588b122373e1f075d5362da573a1dba195c2c70bdb64197be",
+      "test_transaction.py": "2f7ba5b981448c97e4e79dcb9727b6c6de9929f3035b42571a9a39c6f4c42fa5",
+      "transaction.py": "85df46022bda416ea6ef413d83f7ba9f55b2185a5f33ed6fd7ee58da4d1d2ac2",
+      "bootstrap.sh": "7fbfc8e6ad709f306734ad5ed522ea7b999971600f6933258d30bf2c67445392",
+      "dkms-build.sh": "0fed63c2ea3f8507991919019c380cf777cf304b16e9781089792fbdcd83b73e",
+      "driver.sh": "28f32389a4f67e9322583cef38a5ee488059ca47e1e8d2b99153b49c1b0c3d1b",
+      "install.sh": "873732f621d596afd8db7380e0a8c6a10c29af9e071d1030857623a5b0646e90",
+      "kernel-stage.sh": "a45572b50d114a15413b163464f83372788602f34ced38befcd15a46bcbd2ba7",
+      "reproduce-kernel.sh": "c7ece5c506dac0d7e540c007cac7b39547382618f4ef6e11d00ebc7f5582d8f8",
+      "safe-overrides.sh": "dd01b3e6963abded43a2a49add9811cd9e90cbc75f90f7f13f9d74127c7d9d01",
+      "setup.sh": "e61eb3c10cfe9c982b3245f2f91448ae582541db4a061a62819346b6f4acf0ec",
+      "vendor-library.sh": "425cfd66677683892ebb439810e2763259d78cb76770c85c758fa1fc1cae8d57"
+    },
+    "test_log_sha256": "19f528a1cd64306157d9a72f94f2de8d753f85e3ee94dcfbbfac65273e06d174",
+    "production_verified": false
+  },
+  "executed_code": {
+    "passed": true,
+    "captured_at": 1792426047.0736809,
+    "executed_directory": "/root/review2-package",
+    "code_sha256": {
+      "bootstrap.sh": "7fbfc8e6ad709f306734ad5ed522ea7b999971600f6933258d30bf2c67445392",
+      "controller.py": "40d0efd882924d729dc7dad6cdb1dbfa8fa1a89b68514f4a888991a4768e4db9",
+      "dkms-build.sh": "0fed63c2ea3f8507991919019c380cf777cf304b16e9781089792fbdcd83b73e",
+      "driver.sh": "28f32389a4f67e9322583cef38a5ee488059ca47e1e8d2b99153b49c1b0c3d1b",
+      "install.sh": "873732f621d596afd8db7380e0a8c6a10c29af9e071d1030857623a5b0646e90",
+      "install_prebuilt.py": "e870f8159150900c6c9061295ad09de7a9694fcb7d8bf1d236579962c8d20816",
+      "kernel-stage.py": "68c2ba65accd621128473fa9d8c0d53c952f8db5e2137870405fad707357036d",
+      "kernel-stage.sh": "a45572b50d114a15413b163464f83372788602f34ced38befcd15a46bcbd2ba7",
+      "lifecycle.py": "093a31b7724ed860d5734e573c13a8f421819e11d5664bb0a880503617f6e262",
+      "module_identity.py": "257ff6c36514dbfffe46e7e42064c442d90a8a48b653679e1d2ebf8e474c0213",
+      "network_tuning.py": "e6e90874bc98733d1ff626c5d93fc2abf2c2bc3ee5b6736371e6c5950dfa675d",
+      "package_install_gate.py": "e87857aa6e092e9f9c93bb8d58c0df53e2c5152f1dacaf3c8889aa1cce840d29",
+      "package_transactions.py": "9bda12f00abc67c38eb397b16e00c0c9d16bdb9c4d64b8599533171a65aadf50",
+      "patch_sources.py": "fc867eb21d6f72812449ff024ee0f3262329980d28ebeba1e23aff8deee5682c",
+      "preflight.py": "8b1aa5288df82d7161810ed1b25ae811bba4f1b7bda5686342a2e63e368cf5ed",
+      "recover.py": "c28526a6cf55370647113e546a8f7c5f724cfda75d0d0326f3d4fc8a2a36aa84",
+      "reproduce-kernel.sh": "c7ece5c506dac0d7e540c007cac7b39547382618f4ef6e11d00ebc7f5582d8f8",
+      "run_worker.py": "b940f26b0f68e10859950893576087b470b1d72ea540491ce29dbd7e59278ee3",
+      "safe-overrides.sh": "dd01b3e6963abded43a2a49add9811cd9e90cbc75f90f7f13f9d74127c7d9d01",
+      "setup.sh": "e61eb3c10cfe9c982b3245f2f91448ae582541db4a061a62819346b6f4acf0ec",
+      "setup_ru.py": "ecb9b95262672ccf7fd1ce4afdfdb898ad1c7dd24de37e83046cccc54757916b",
+      "test_allocator.py": "ae5d1a7eb85f6512e40157a0e30ae18988dd4d4c4da822bc75e66c577e24f9d4",
+      "test_compat72_copy.py": "ad76ddf184c85bb8f9d2242e3c73a7114f56d746954c8d4d8d91125e2cd95f54",
+      "test_hostname_bounds.py": "14f5b81b2067fc30425c84df320fcfc517c8f8cfa9b856f36a78d754cc5340d0",
+      "test_lifecycle_ownership.py": "cc410abc86254aad09b1bbdb9b61987019ee7da9152d15206ccf2262e73c151c",
+      "test_listeners.py": "35f047308b3176732631402808822e09274af9c37645d4edad257d096c595adb",
+      "test_network_recovery.py": "c39a9df325931d3b7917c37b534b0ffd505f598a7d4c0db48b84563af6cedf06",
+      "test_package_install_gate.py": "74d3eb23a101072f285c44f2f444e6c7fce340bd909e99713e8f2ed3cd91d86e",
+      "test_package_transactions.py": "38414d1efd8863aed92f2b8538243c03a6fae3de7847e47dfc6f5a5501910d04",
+      "test_preflight.py": "fbcdfe4fface485e3a8c89b823e0ed5a9bd58615771755fe5abebf5d026b768f",
+      "test_setup_lifecycle.py": "cb5ddf8481e65cf588b122373e1f075d5362da573a1dba195c2c70bdb64197be",
+      "test_transaction.py": "2f7ba5b981448c97e4e79dcb9727b6c6de9929f3035b42571a9a39c6f4c42fa5",
+      "transaction.py": "85df46022bda416ea6ef413d83f7ba9f55b2185a5f33ed6fd7ee58da4d1d2ac2",
+      "vendor-library.sh": "425cfd66677683892ebb439810e2763259d78cb76770c85c758fa1fc1cae8d57"
+    },
+    "latest_code_ctime": 1792423679.2058294,
+    "receipts": {
+      "review2_ready": {
+        "sha256": "bf1c2efda2d6b894683a34ecde872ddb0c0183246869282e06e4f61367f4ba93",
+        "mtime": 1792423463.801636
+      },
+      "review2_packages": {
+        "sha256": "aec4490436728226df894a819e3c1470ca01474e37e25d694c18b466fd165250",
+        "mtime": 1792423880.195764
+      },
+      "review2_network_v2": {
+        "sha256": "6e98a586d4c45ab51419f61efe3da98abd793b07d35f8f7fcf395ac8ad91a42f",
+        "mtime": 1792424310.9726145
+      },
+      "review2_full": {
+        "sha256": "dc345f297dc38400728810bf47008eeec38ce9856c4ca1d67902bde44df1919b",
+        "mtime": 1792425361.933281
+      },
+      "review2_cold": {
+        "sha256": "b96c35f831c9f2d3bc39d574264d94a0f87e7e1424222dfb827791ec16681f1d",
+        "mtime": 1792425586.6610541
+      },
+      "review2_kernel": {
+        "sha256": "bf13d9b17a44e95b274682740a48db77deca99e4b4de5439ad75174524851814",
+        "mtime": 1792425976.4217634
+      }
+    },
+    "guest_manifest_verified": true,
+    "new_boot_id": "8b989ea0-4db7-4cc1-a652-137ad62bcc90"
+  },
+  "isolated_vm": {
+    "os": "Ubuntu 24.04",
+    "kernel": "7.0.12-x64v2-dsg1-xanmod1",
+    "results": {
+      "package-ownership": {
+        "passed": true,
+        "apt_private_log": true,
+        "dpkg_private_log": true,
+        "repeated_install_preserves_foreign_package": true,
+        "disable_remove_preserves_foreign_package": true,
+        "existing_package_upgrade_refused": true,
+        "indirect_dependency_upgrade_refused": true
+      },
+      "network-recovery": {
+        "passed": true,
+        "health_exit17_rollback": true,
+        "stale_timer_preserves_new_worker_pid_and_pending": true,
+        "new_worker_acceptance": true,
+        "health_timeout120_systemd_recovery": true,
+        "lifecycle_sysctl_restoration": true,
+        "new_kernel_errors": 0
+      },
+      "full-cycle": {
+        "passed": true,
+        "fresh_full_install": true,
+        "repeat_full_install": true,
+        "three_layer_payload_rounds": 3,
+        "disable_repeat_resume": true,
+        "immutable_first_baseline": true,
+        "initial_packages_exact": true,
+        "initial_sysctls_exact": true,
+        "boot_selection_unchanged": true,
+        "kernel_errors": 0,
+        "removal_reports_live_module_reboot_required": true,
+        "cold_removed_check_pending": true
+      },
+      "cold-removed": {
+        "passed": true,
+        "new_boot_confirmed": true,
+        "no_ndpi_module_after_removal": true,
+        "no_managed_hooks": true,
+        "original_packages_exact": true,
+        "kernel_errors": 0
+      },
+      "kernel-only": {
+        "passed": true,
+        "from": "7.0.12-x64v2-dsg1-xanmod1",
+        "prepared": "7.2.9-x64v3-dsg1-xanmod1",
+        "owned_kernel_packages": 2,
+        "no_guard_installed": true,
+        "running_kernel_unchanged": true,
+        "saved_boot_entry_unchanged": true,
+        "pending_status_code20": true,
+        "removal_original_packages_exact": true,
+        "kernel_errors": 0
+      }
+    }
+  },
+  "preserved_failed_probe": "First network probe lacked nf_conntrack in the empty fixture and stopped before installer mutation. The fixture module was loaded before a separate successful run.",
+  "limits": [
+    "Corrected lifecycle and tuning paths checked in an isolated VM only.",
+    "No new production SSH or actual VPN acceptance.",
+    "Concurrent external file writers during installation lack complete per-writer provenance.",
+    "Earlier rc1 module/core evidence remains historical and separately versioned."
+  ],
+  "production_accepted": false,
+  "production_bootstrap_enabled": false,
+  "unchanged_module_sha256": {
+    "6.8.0-147-generic": "a0fbde3481b0c36f5269c6a9d9c23a63a1d8a2250fdd20fb95222f21b19d2454",
+    "7.0.12-x64v2-dsg1-xanmod1": "ece7def533a032fe3edc292e0be58d30b4cc5a6a58018ca942c453a5e59e8822",
+    "7.2.9-x64v3-dsg1-xanmod1": "b899f08aa1865084c1b855238a2d1428ceb93889a940fd0279a1678b54683ee7",
+    "6.8.0-87-generic": "ea53ae99f1b3bfed0de20a83230bed25654585f15185dff2bc46616baa8a892d"
+  },
+  "preserved_identity_probe_failure": "The first identity probe incorrectly required copying before VM readiness. The package suite actually creates the guest copy after readiness and verifies its manifest before running any package test. The corrected independent probe verifies that interval, unchanged code hashes and exact receipt hashes. Both probe receipts are retained."
+}
