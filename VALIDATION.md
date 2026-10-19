@@ -17,10 +17,21 @@ completed successfully. A separate SIGKILL test killed the whole installer
 control group: systemd OnFailure recovery restored the transaction, left no
 worker processes, and the payload tests passed afterward.
 
-Cold-boot persistence and the 7.2 runtime gate are still being tested.
-The 7.2 module compiles, but compilation alone is not runtime acceptance.
-The development compatibility list includes the candidate so it can be tested;
-it must not be treated as an accepted release matrix.
+Cold-boot persistence passed for both custom XanMod 7.0 and 7.2 kernels,
+including exact loaded-module identity and all three filtering layers after
+both services became active. The 7.2 VM also passed the intentional health-check
+failure, scoped rollback, traffic after rollback and a repeated installation.
+An initial 7.0 probe made while the services were still starting did not pass;
+these results do not claim filtering is ready before service startup completes.
+The latest Ubuntu 6.8 module is undergoing its own runtime validation.
+
+The first production canary on the custom XanMod 7.0 kernel passed five actual
+VPN payload checks before and five after installation, all three filtering
+layers, strict public-site TLS, exact protected firewall tables and rule order,
+routes, policy rules, configuration hashes and container identities. Its previous
+kernels remain installed. No kernel faults were found in the bounded window.
+The remaining servers are being handled sequentially. This is still a
+development snapshot, not a completed fleet or release acceptance.
 
 Offline checks: 10 compatibility/preservation/listener tests, 768 actual
 hostname-formatter cases under ASan/UBSan, and 16,640 legacy bounded-copy cases
@@ -30,7 +41,9 @@ refusal of unexpected source changes were also checked.
 `kernel-stage.sh` is an experimental, separately tested preparation step. It
 stages image, headers and an exact module alongside existing kernels, with
 bounded CPU/RAM/time, checksum checks and temporary kernel-hook suppression.
-It does not reboot or select the candidate for boot. It requires an existing
+Reviewed Linux crypto/netfilter module renames are resolved against the target
+configuration and replacement modules; missing hardware drivers still stop
+preparation. It does not reboot or select the candidate for boot. It requires an existing
 saved GRUB fallback and rejects foreign DKMS driver migrations. Automatic
 kernel activation is not yet implemented. In particular, GRUB environments on
 some RAID layouts cannot clear a one-shot boot selection before Linux starts.

@@ -61,7 +61,7 @@ def main():
   assert state not in ('active','activating','deactivating'),'A kernel helper is already running'
   mask=Path('/run/systemd/system')/target_unit
   assert not mask.exists() and not mask.is_symlink(),'Existing kernel helper override requires review'
-  noauto=Path('/etc/dkms/no-autoinstall');created=False
+  noauto=Path('/etc/dkms/no-autoinstall');created=False;cleanup_allowed=True
   assert not (STATE/'temporary.json').exists(),'An earlier staging job requires cleanup first'
   (STATE/'temporary.json').write_text(json.dumps({'unit':target_unit,'noauto_created':Path('/etc/dkms').is_dir() and not noauto.exists()}))
   try:
@@ -70,26 +70,69 @@ def main():
     with noauto.open('x') as n:n.write('Temporary ds-guard exact-kernel staging\n')
     created=True
    log=STATE/(a.kernel+'.dpkg.log')
-   with log.open('w') as out:
-    subprocess.run(['dpkg','-i',str(a.directory/m['image']),str(a.directory/m['headers'])],check=True,stdout=out,stderr=subprocess.STDOUT,timeout=900,env={**os.environ,'DEBIAN_FRONTEND':'noninteractive','NEEDRESTART_SUSPEND':'1'})
+   required=[]
+   for kind in ['image','headers']:
+    version=run(['dpkg-deb','-f',str(a.directory/m[kind]),'Version'])
+    status=run(['dpkg-query','-W','-f=${db:Status-Status} ${Version}','linux-'+kind+'-'+a.kernel],check=False)
+    if status!='installed '+version:required.append(str(a.directory/m[kind]))
+   if required:
+    with log.open('a') as out:
+     subprocess.run(['dpkg','-i',*required],check=True,stdout=out,stderr=subprocess.STDOUT,timeout=900,env={**os.environ,'DEBIAN_FRONTEND':'noninteractive','NEEDRESTART_SUSPEND':'1'})
    dest=Path('/lib/modules')/a.kernel/'updates/dkms';dest.mkdir(parents=True,exist_ok=True)
    existing=list(dest.glob('xt_ndpi.ko*'))
    assert not existing or existing==[dest/'xt_ndpi.ko'] and sha(existing[0])==manifest['sha256']['xt_ndpi.ko'],'Different candidate module already exists'
    shutil.copyfile(bundle/'xt_ndpi.ko',dest/'xt_ndpi.ko');(dest/'xt_ndpi.ko').chmod(0o644)
    run(['depmod','-a',a.kernel],timeout=90)
    assert run(['modinfo','-k',a.kernel,'-n','xt_ndpi'])==str(dest/'xt_ndpi.ko')
+   replacements={};missing=[]
+   target_config=Path('/boot/config-'+a.kernel).read_text()
+   # Reviewed moves in the pinned 7.x lib/crypto and lib/crc Makefiles.
+   crypto_moves={'blake2b_generic':('libblake2b','CONFIG_CRYPTO_LIB_BLAKE2B='),
+    'libcrc32c':('crc32','CONFIG_CRC32='),'crc32_pclmul':('crc32','CONFIG_CRC32_ARCH=y'),
+    'crct10dif_pclmul':('crc_t10dif','CONFIG_CRC_T10DIF_ARCH=y'),
+    'sha256_ssse3':('libsha256','CONFIG_CRYPTO_LIB_SHA256_ARCH=y'),
+    'sha1_ssse3':('libsha1','CONFIG_CRYPTO_LIB_SHA1_ARCH=y')}
+   for n in ['polyval_clmulni','polyval_generic']:
+    crypto_moves[n]=('libpolyval','CONFIG_CRYPTO_LIB_POLYVAL_ARCH=y') if a.kernel.startswith('7.0.12-') else ('libgf128hash','CONFIG_CRYPTO_LIB_GF128HASH_ARCH=y')
    for line in Path('/proc/modules').read_text().splitlines():
     name=line.split()[0]
     if name=='xt_ndpi':continue
-    run(['modinfo','-k',a.kernel,name],check=True)
+    # Linux 7.2 links nfnetlink.o into the built-in netfilter core; it is no
+    # longer a standalone module (pinned upstream net/netfilter/Makefile).
+    if name=='nfnetlink' and a.kernel=='7.2.9-x64v3-dsg1-xanmod1' and 'CONFIG_NETFILTER_NETLINK=y' in Path('/boot/config-'+a.kernel).read_text():
+     replacements[name]='built-in netfilter core';continue
+    # The reviewed 7.2 lib/crypto/Makefile links x86/ghash-pclmul.o into
+    # libgf128hash instead of the old architecture-specific crypto module.
+    if name=='ghash_clmulni_intel' and a.kernel=='7.2.9-x64v3-dsg1-xanmod1' and 'CONFIG_CRYPTO_LIB_GF128HASH_ARCH=y' in Path('/boot/config-'+a.kernel).read_text():
+     run(['modinfo','-k',a.kernel,'libgf128hash']);replacements[name]='libgf128hash';continue
+    if name in crypto_moves:
+     replacement,flag=crypto_moves[name]
+     assert flag in target_config,'Required replacement implementation is disabled: '+flag
+     run(['modinfo','-k',a.kernel,replacement]);replacements[name]=replacement;continue
+    if name=='crypto_simd':
+     holders={p.name for p in Path('/sys/module/crypto_simd/holders').iterdir()}
+     # The new AES-NI implementation uses crypto_simd_usable() inline and
+     # does not register the former SIMD wrapper algorithms.
+     assert holders<={'aesni_intel'},'Unreviewed consumer of the former SIMD wrapper'
+     dependencies=run(['modinfo','-k',a.kernel,'-F','depends','aesni_intel']).split(',')
+     assert 'crypto_simd' not in dependencies
+     replacements[name]='AES-NI direct implementation';continue
+    p=subprocess.run(['modinfo','-k',a.kernel,name],capture_output=True,text=True,timeout=20)
+    if p.returncode:missing.append(name)
+   assert not missing,'Loaded module counterparts missing: '+', '.join(missing)
    assert Path('/boot/vmlinuz-'+a.kernel).stat().st_size>1024**2
    assert Path('/boot/initrd.img-'+a.kernel).stat().st_size>1024**2
    assert 'CONFIG_LIVEPATCH=y' in Path('/boot/config-'+a.kernel).read_text()
    assert before==run(['grub-editenv','/boot/grub/grubenv','list']),'Boot environment changed unexpectedly'
-   result={'candidate':a.kernel,'running_kernel':platform.release(),'module_sha256':sha(dest/'xt_ndpi.ko'),'boot_environment_preserved':True,'rebooted':False,'accepted':False}
+   result={'candidate':a.kernel,'running_kernel':platform.release(),'module_sha256':sha(dest/'xt_ndpi.ko'),'reviewed_builtin_replacements':replacements,'boot_environment_preserved':True,'rebooted':False,'accepted':False}
    (STATE/(a.kernel+'.staged.json')).write_text(json.dumps(result,indent=2));print(json.dumps(result))
+  except subprocess.TimeoutExpired:
+   # Remaining package children must be stopped by systemd before recovery
+   # removes the kernel-hook suppression. Never race them in-process.
+   cleanup_allowed=False
+   raise
   finally:
-   cleanup()
+   if cleanup_allowed:cleanup()
 
 if __name__=='__main__':
  if sys.argv[1:]==['--cleanup']:cleanup()
