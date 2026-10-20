@@ -21,12 +21,12 @@ import time
 sys.dont_write_bytecode = True
 import boot_trial as boot
 
-VERSION = '1.0.0-rc5'
-RELEASE = 'v1.7.11-dsg2-rc5'
-ARCHIVE_SHA = '8970d7396d7db2d1683431e6f199739bb65dfe39240bfceee5c5941366221ea2'
-MANIFEST_SHA = 'ecb74540d41119fd53f10047115a2128802c931fd7e316b997acf3d85c6a6d2c'
-PAYLOAD_FILES = 83
-ARCHIVE_MEMBERS = 84
+VERSION = '1.0.0-rc6'
+RELEASE = 'v1.7.11-dsg2-rc6'
+ARCHIVE_SHA = '03f36629175224ae31a2595709d47b4ec61f9646f20aaf51909fe7a54d22954d'
+MANIFEST_SHA = 'b5d0a339624f3b9fd2167b74cc2033d698f00294beaa766ade22cffe2204e7f4'
+PAYLOAD_FILES = 87
+ARCHIVE_MEMBERS = 88
 URL = ("https://github.com/ialexisizotov-ctrl/ds-guard-xanmod/releases/download/"
        + RELEASE + "/ds-guard-safe-" + RELEASE + ".tar.gz")
 CACHE = Path("/var/cache/ds-guard-wizard")
@@ -211,9 +211,10 @@ def selection():
   8. Удалить изменения управляемой установки
   9. Отменить обновление прежней установки
  10. Только проверенное ядро Ubuntu
+ 11. ds-guard и сетевые параметры на текущем ядре, без смены ядра
   0. Выход
 """)
-    choice = ask("Выберите пункт [1]: ", set(map(str, range(11))), "1")
+    choice = ask("Выберите пункт [1]: ", set(map(str, range(12))), "1")
     return {
         "1": ["--mode", "full"], "2": ["--mode", "kernel", "--kernel-policy", "xanmod"],
         "3": ["--mode", "tune"], "4": ["--mode", "guard"],
@@ -221,6 +222,7 @@ def selection():
         "7": ["--mode", "disable"], "8": ["--mode", "remove"],
         "9": ["--mode", "rollback-upgrade"],
         "10": ["--mode", "kernel", "--kernel-policy", "ubuntu"], "0": None,
+        "11": ["--mode", "full", "--kernel-policy", "keep"],
     }[choice]
 
 
@@ -608,7 +610,8 @@ def main(argv=None):
                   "Работающее ядро установщик не удалит.")
         before_kernel = platform.release()
         stages_before = stage_signatures()
-        prepare_install_fallback(directory, args)
+        if prepare_install_fallback(directory, args) is False:
+            return 0
         rc = setup(directory, args)
         if rc == 0 and mode == "remove":
             boot.cleanup_after_remove()
@@ -624,6 +627,59 @@ def main(argv=None):
         return offer_reboot(trial)
 
 
+def current_kernel_readiness(directory):
+    """Exact bundle + real read-only gates; no compile-as-acceptance shortcut."""
+    code = (
+        "import json,sys;from pathlib import Path;"
+        "sys.path.insert(0,sys.argv[1]);import preflight;"
+        "r=preflight.collect();p=Path(sys.argv[1])/'assets'/r['kernel']/'manifest.json';"
+        "r['prebuilt_present']=p.is_file();"
+        "print(json.dumps(r))"
+    )
+    result = run([sys.executable, "-E", "-s", "-B", "-c", code, str(directory)],
+                 capture_output=True, text=True, timeout=120)
+    require(result.returncode == 0,
+            "Не удалось проверить совместимость текущего ядра. Изменения не начаты.")
+    result = json.loads(result.stdout)
+    require(result.get("kernel") == platform.release() and
+            isinstance(result.get("errors"), list) and
+            isinstance(result.get("compatible"), bool) and
+            isinstance(result.get("prebuilt_present"), bool),
+            "Получен неполный результат проверки текущего ядра.")
+    return result
+
+
+def offer_current_kernel(directory, args, reason):
+    print("[СМЕНА ЯДРА НЕДОСТУПНА] " + str(reason), flush=True)
+    mode = args[args.index("--mode") + 1]
+    if mode != "full":
+        raise Refusal("Выбран режим установки только ядра. Он не заменяется установкой "
+                      "ds-guard. Чтобы сохранить ядро, выберите пункт 11 главного меню.")
+    readiness = current_kernel_readiness(directory)
+    if not readiness["compatible"] or not readiness["prebuilt_present"] or readiness["errors"]:
+        details = readiness["errors"] or ["Для текущего ядра нет проверенного модуля в комплекте."]
+        raise Refusal("Текущее ядро " + readiness["kernel"] +
+                      " пока нельзя использовать для ds-guard: " + "; ".join(details) +
+                      " Ядро, загрузчик и фильтрация не изменены.")
+    print("[ТЕКУЩЕЕ ЯДРО ПРОВЕРЕНО] " + readiness["kernel"] +
+          ". Для него есть совместимый комплект ds-guard.", flush=True)
+    choice = ask("\n1. Использовать текущее ядро: ds-guard и выбранные сетевые настройки\n"
+                 "0. Выйти без установки\nВыберите [0]: ",
+                 {"0", "1"}, "0", noninteractive="unavailable")
+    if choice == "unavailable":
+        raise Refusal("Без терминала выбор ядра не меняется автоматически. "
+                      "Для явного запуска на текущем ядре укажите "
+                      "--mode full --kernel-policy keep. Установка не начата.")
+    if choice == "0":
+        print("[ВЫХОД] Установка не начата. Для явного запуска без смены ядра "
+              "используйте --mode full --kernel-policy keep.")
+        return False
+    args[:] = resume_args(args)
+    print("[ЯДРО СОХРАНЕНО] Продолжаю выбранную установку на текущем ядре. "
+          "Смена загрузки и перезагрузка не требуются.", flush=True)
+    return True
+
+
 def prepare_install_fallback(directory, args):
     mode = args[args.index("--mode") + 1]
     if mode not in ("full", "kernel"):
@@ -634,21 +690,34 @@ def prepare_install_fallback(directory, args):
     # Reuse the immutable core's exact read-only selection, including legacy
     # upgrade deferral, rather than maintaining a second kernel-selection policy.
     code = (
-        "import json,sys;sys.path.insert(0,sys.argv[1]);import setup_ru as s;"
-        "from legacy_context import context;"
-        "i=s.system_info();p=sys.argv[3];"
-        "p='keep' if sys.argv[2]=='full' and context(s.ROOT) else p;"
-        "k,r=s.choose_kernel(json.loads((s.ROOT/'kernels.json').read_text()),"
-        "i['os_id'],i['os_version'],i['flags'],i['kernel'],p,i['loaded_modules']);"
-        "print(json.dumps({'current':i['kernel'],'selected':k}))"
+        "import json,sys;sys.path.insert(0,sys.argv[1]);import setup_ru as s\n"
+        "from legacy_context import context\n"
+        "i=s.system_info();p=sys.argv[3]\n"
+        "p='keep' if sys.argv[2]=='full' and context(s.ROOT) else p\n"
+        "try:\n"
+        " k,r=s.choose_kernel(json.loads((s.ROOT/'kernels.json').read_text()),"
+        "i['os_id'],i['os_version'],i['flags'],i['kernel'],p,i['loaded_modules'])\n"
+        "except s.Refusal as error:\n"
+        " print(json.dumps({'current':i['kernel'],'selection_error':str(error)}))\n"
+        "else:\n"
+        " print(json.dumps({'current':i['kernel'],'selected':k}))\n"
     )
     result = run([sys.executable, "-E", "-s", "-B", "-c", code, str(directory), mode, policy],
                  capture_output=True, text=True, timeout=60)
     require(result.returncode == 0, "Не удалось проверить выбор ядра до подготовки загрузчика. " +
             result.stderr[-600:].strip())
     selected = json.loads(result.stdout)
+    if "selection_error" in selected:
+        return offer_current_kernel(directory, args, selected["selection_error"])
     if selected["selected"] == selected["current"]:
         return
+    # Probe before ensure_fallback: the latter may write a journal/GRUB files.
+    # Only the typed storage refusal permits a fallback offer. Corruption,
+    # command failures and partial mutations must still stop the operation.
+    try:
+        boot.environment_backend()
+    except boot.UnsupportedStorage as error:
+        return offer_current_kernel(directory, args, error)
     print("[ПОДГОТОВКА ВОЗВРАТА] Проверка и закрепление работающего ядра до установки нового.", flush=True)
     fallback = boot.ensure_fallback()
     print("[ВОЗВРАТ ПОДГОТОВЛЕН] Резервное ядро: " + fallback["fallback"] +
