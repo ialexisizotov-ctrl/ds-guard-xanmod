@@ -137,6 +137,7 @@ def snapshot():
   iptables=run(['iptables-save'])
  return {'files':files,'file_owners':owners,'generation_text':generation_text,'packages':installed,'ownership_schema':1,'owned_packages':owned,'manual':run(['apt-mark','showmanual']).splitlines(),
   'units':units(),'values':values(),'iptables':iptables,'kernel':os.uname().release,
+  'boot_id':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
   'module_state':{n:Path('/sys/module',n).exists() for n in ['xt_ndpi','tcp_bbr','nf_conntrack']},
   'loaded_module_note_hex':Path('/sys/module/xt_ndpi/notes/.note.gnu.build-id').read_bytes().hex() if Path('/sys/module/xt_ndpi/notes/.note.gnu.build-id').is_file() else None,
   'conntrack_hashsize':Path('/sys/module/nf_conntrack/parameters/hashsize').read_text().strip() if Path('/sys/module/nf_conntrack/parameters/hashsize').exists() else None,'time':time.time()}
@@ -193,7 +194,10 @@ def begin(legacy_upgrade=False,legacy_cold_boot=False):
   save(STATE/'before.json',d);save(STATE/'after.json',d)
   current=d
  else:
-  b,a=read_records();current=snapshot();verify_repeat_baseline(b,a,current,legacy_cold_boot=legacy_cold_boot)
+  b,a=read_records();current=snapshot()
+  from boot_baseline import capture
+  if capture(STATE,b,a,current,verify_repeat_baseline,save):b,a=read_records()
+  verify_repeat_baseline(b,a,current,legacy_cold_boot=legacy_cold_boot)
  save(STATE/'pending.json',{'started':time.time(),'boot_id':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'operation_id':str(uuid.uuid4()),'packages_before':current['packages'],'metadata_before':{k:current[k] for k in ['files','file_owners','values','units','manual']}})
 
 def seal(rc):
@@ -221,6 +225,8 @@ def seal(rc):
    for k,v in d['values'].items():
     if k not in initial['values']:loaded.setdefault(k,v)
  previous=json.loads((STATE/'after.json').read_text());current=snapshot()
+ from boot_baseline import effective
+ _,previous=effective(STATE,initial,previous,os.uname().release)
  current['values']=sealed_values(operation,previous['values'],current['values'])
  # Existing APT marks are not attributed by package install receipts. The
  # package wrappers request only absent packages; never rewrite foreign marks.
@@ -236,7 +242,8 @@ def read_records():
  if (STATE/'first-loaded-values.json').exists():
   for k,v in json.loads((STATE/'first-loaded-values.json').read_text()).items():b['values'].setdefault(k,v)
  a=json.loads((STATE/'after.json').read_text());recorded_package_ownership(a)
- return b,a
+ from boot_baseline import effective
+ return effective(STATE,b,a,os.uname().release)
 
 def restore_file(name,item):
  p=Path(name)

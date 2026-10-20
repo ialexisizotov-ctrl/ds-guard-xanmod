@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "release": "v1.7.11-dsg2-rc5",
+  "status": "LOCAL_VALIDATION_PASS",
+  "core_tests": {
+    "tests": 260,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "kernel_and_module_binaries_changed": false,
+  "previous_release": "v1.7.11-dsg2-rc4",
+  "all_servers_accepted": false,
+  "scope": "Measured first-touch sysctl baseline only after verified fresh kernel staging; original journal immutable."
+}

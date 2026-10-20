@@ -1,26 +1,18 @@
 {
   "schema": 1,
-  "wizard_version": "1.0.0-rc4",
-  "release": "v1.7.11-dsg2-rc4",
+  "release": "v1.7.11-dsg2-rc5",
   "status": "LOCAL_VALIDATION_PASS",
-  "wizard_tests": {
-    "tests": 180,
+  "core_tests": {
+    "tests": 260,
     "failures": 0,
     "errors": 0,
     "skipped": 0
   },
-  "payload_archive_sha256": "b77dd6b4f11ac863f5c3fbc2a30c54b19ddb61a80eb646a96779ec49abfb552e",
-  "payload_manifest_sha256": "7389c5adf29a37360735e0351c22572fbf448d3a7ea918c6d6c1bfb5a71ff48c",
-  "core_payload_changed": false,
-  "source_tests_are_mocked": true,
-  "whole_machine_reboot_tested": false,
+  "kernel_and_module_binaries_changed": false,
+  "previous_release": "v1.7.11-dsg2-rc4",
   "all_servers_accepted": false,
-  "scope_note": "Initial numeric-GRUB fallback preparation, repetition, conflicts and rollback; live outcomes are separate.",
-  "generated_wizard_tests": {
-    "tests": 180,
-    "failures": 0,
-    "errors": 0,
-    "skipped": 0
-  },
-  "archive_extraction_verified": true
+  "scope": "Measured first-touch sysctl baseline only after verified fresh kernel staging; original journal immutable.",
+  "wizard_version": "1.0.0-rc5",
+  "payload_archive_sha256": "8970d7396d7db2d1683431e6f199739bb65dfe39240bfceee5c5941366221ea2",
+  "payload_manifest_sha256": "ecb74540d41119fd53f10047115a2128802c931fd7e316b997acf3d85c6a6d2c"
 }
