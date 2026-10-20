@@ -1,0 +1,207 @@
+{
+  "schema": 1,
+  "component": "ds-guard interactive boot wizard",
+  "version": "1.0.0-rc1",
+  "time_utc": "2026-10-20T13:11:03.998344+00:00",
+  "status": "PASS_WITH_DOCUMENTED_SCOPE",
+  "immutable_payload_release": "v1.7.11-dsg2-rc3",
+  "production_commands_this_validation": 0,
+  "fresh_production_acceptance": false,
+  "local_tests": {
+    "status": "PASS",
+    "unit_tests": 130,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "bash_syntax": "PASS",
+    "python_compile": "PASS",
+    "actual_rc3_archive_extraction_and_manifest_verification": "PASS",
+    "actual_rc3_payloads": 75,
+    "archive_members": 76,
+    "archive_sha256": "e0541642f89f961bd5c9a8e7039717ee66b2f53d09b40cfd791c43b3610c8208"
+  },
+  "bootstrap_transport_tests": {
+    "status": "PASS",
+    "time_utc": "2026-10-20T13:08:10.174714+00:00",
+    "cases": [
+      {
+        "case": "pass",
+        "expected_returncode": 0,
+        "status": "PASS",
+        "mock_python_called": true
+      },
+      {
+        "case": "return20",
+        "expected_returncode": 20,
+        "status": "PASS",
+        "mock_python_called": true
+      },
+      {
+        "case": "return78",
+        "expected_returncode": 78,
+        "status": "PASS",
+        "mock_python_called": true
+      },
+      {
+        "case": "download_error",
+        "expected_returncode": 22,
+        "status": "PASS",
+        "mock_python_called": false
+      },
+      {
+        "case": "corrupt",
+        "expected_returncode": 78,
+        "status": "PASS",
+        "mock_python_called": false
+      },
+      {
+        "case": "truncated",
+        "expected_returncode": 2,
+        "status": "PASS",
+        "mock_python_called": false
+      }
+    ],
+    "hashes": {
+      "wizard.py": "9307f5705f6fb4dd0658e93587a320ffa71b96e7e0cda49bf1cf0f9a8dec140d",
+      "boot_trial.py": "ed0e3c682ed01ed325bba442bef462ba1ac841a6b0a129373f5c5f5645456ab9"
+    },
+    "bootstrap_sha256": "4ddb6ff25fcd4c030a6435251e0265f3f365f363f7da2b0f7b313f3de09e44eb",
+    "network_used": false,
+    "installer_executed": false
+  },
+  "real_pty_input_tests": {
+    "status": "PASS",
+    "time_utc": "2026-10-20T13:08:16.727926+00:00",
+    "cases": [
+      {
+        "case": "Russian_yes",
+        "status": "PASS",
+        "exit_code": 0,
+        "stdin_was_pipe_like": true
+      },
+      {
+        "case": "Enter_keeps_safe_default",
+        "status": "PASS",
+        "exit_code": 0,
+        "stdin_was_pipe_like": true
+      },
+      {
+        "case": "Unknown_choice_refuses",
+        "status": "PASS",
+        "exit_code": 78,
+        "stdin_was_pipe_like": true
+      },
+      {
+        "case": "EOF_refuses",
+        "status": "PASS",
+        "exit_code": 78,
+        "stdin_was_pipe_like": true
+      }
+    ],
+    "wizard_sha256": "9307f5705f6fb4dd0658e93587a320ffa71b96e7e0cda49bf1cf0f9a8dec140d",
+    "production_actions": 0,
+    "installer_executed": false,
+    "preserved_initial_failure": "Buffered /dev/tty r+ was rejected as non-seekable; separate read/write streams fixed."
+  },
+  "isolated_boot_vm": {
+    "schema": 1,
+    "status": "PASS_WITH_EXPLICIT_LAB_LIMITS",
+    "completed_at_utc": "2026-10-20T13:10:48.286555+00:00",
+    "production_access": false,
+    "production_acceptance": false,
+    "environment": {
+      "virtualization": "QEMU TCG",
+      "os": "Ubuntu 22.04",
+      "fallback_kernel": "6.8.0-87-generic",
+      "trial_kernel": "5.15.0-198-generic",
+      "new_kernel_compatibility_claimed": false,
+      "core_installer_rerun": false
+    },
+    "healthy_boot": {
+      "status": "PASS",
+      "helper_sha256": "146da60d31da72481878744f6b18332640c28f1678180de2151f9a348a7961ac",
+      "actual_grub_one_shot": true,
+      "target_guard_recorded_healthy": true,
+      "recovery_timer_stopped_by_guard": true,
+      "old_saved_default_preserved": true,
+      "next_entry_consumed": true,
+      "legacy_finalizer_blocked": true,
+      "return_method": "External restart of own LAB QEMU after 9p fixture transport failed",
+      "automatic_recovery_claimed_for_this_case": false
+    },
+    "failure_recovery": {
+      "status": "PASS",
+      "helper_sha256": "ed0e3c682ed01ed325bba442bef462ba1ac841a6b0a129373f5c5f5645456ab9",
+      "actual_grub_backend_probe": {
+        "filesystem": "ext2",
+        "abstraction": ""
+      },
+      "fault": "LAB-only service stopped SSH on trial kernel",
+      "automatic_timer_reboot_to_fallback": true,
+      "recovery_attempts": 1,
+      "no_external_reset_during_failure_trial": true,
+      "next_entry_consumed": true,
+      "old_saved_default_preserved": true,
+      "ssh_active_after_fallback": true,
+      "repeat_recover_noop": true,
+      "legacy_finalizer_blocked": true,
+      "explicit_cancel_removed_own_boot_units": true,
+      "legacy_finalizer_fence_retained_after_cancel": true,
+      "journal_classification": {
+        "health_check_exit": 1,
+        "health_check_reason": "Expected injected SSH stop",
+        "recovery_service_exit": 20,
+        "recovery_systemd_result": "exit-code failure reported after successful reboot request",
+        "successful_fallback_verified_independently": true
+      }
+    },
+    "systemd_unit_parsing": {
+      "status": "PASS",
+      "returncode": 0,
+      "unrelated_existing_warning": "snapd.service RestartMode unsupported by LAB systemd"
+    },
+    "live_confirm_and_undo": {
+      "status": "NOT_RUN",
+      "reason": "Trial-kernel 9p LAB control transport unavailable; covered separately by unit tests"
+    },
+    "preserved_lab_events": [
+      "Initial inventory command returned 1 only because no xanmod unit files existed",
+      "Trial kernel failed mounting LAB 9p share; LAB SSH remained healthy in first case",
+      "External LAB-only reset was used to regain controller after first healthy trial",
+      "New prepare correctly refused existing guard paths before explicit cancel closed previous trial"
+    ],
+    "base_image": {
+      "unchanged": true,
+      "sha256_before": "3fc9e0492b4b9295d5f10e53030c706b7f2ba1e1ca51edce09ed15a3b04c1683",
+      "sha256_after": "3fc9e0492b4b9295d5f10e53030c706b7f2ba1e1ca51edce09ed15a3b04c1683"
+    },
+    "qemu": {
+      "stopped": true,
+      "final_shutdown": "Guest systemctl poweroff; process absent; serial power-down recorded"
+    },
+    "limits": [
+      "No production server was contacted",
+      "No bootloader or pre-userspace hard-hang reset tested",
+      "No hardware watchdog enabled or tested",
+      "No automatic guarantee for every kernel or hypervisor",
+      "Healthy trial predates final read-only GRUB backend preflight; final failure trial used final helper"
+    ]
+  },
+  "source_sha256": {
+    "interactive.sh": "4ddb6ff25fcd4c030a6435251e0265f3f365f363f7da2b0f7b313f3de09e44eb",
+    "wizard.py": "9307f5705f6fb4dd0658e93587a320ffa71b96e7e0cda49bf1cf0f9a8dec140d",
+    "boot_trial.py": "ed0e3c682ed01ed325bba442bef462ba1ac841a6b0a129373f5c5f5645456ab9",
+    "test_wizard.py": "0832ec3a949738d7b985eec58a94f94f040618cae19b73ef90c3cf900ebb3e57",
+    "test_boot_trial.py": "0f0d4325fe5a60cd8b0dac2ce9214bb1560f8be7a5f06727f4bb29c8b879dc8b",
+    "INTERACTIVE_RU.md": "3bfd4712e073288af4343a98dcda99aa9e95ba0ff513c21daf938235eb42e24d"
+  },
+  "limits": [
+    "A one-shot GRUB selection cannot itself reset a hard-hung machine.",
+    "Automatic recovery requires working Linux userspace and systemd.",
+    "No provider or hardware watchdog was enabled or verified.",
+    "Local SSH/listener/route checks do not establish public VPN client acceptance.",
+    "GRUB trial requires plain ext2/ext3/ext4 storage without LVM/RAID/crypto.",
+    "Boot VM kernels are distinct from production XanMod compatibility acceptance.",
+    "The immutable rc3 payload and its previous validation were not rebuilt."
+  ]
+}
