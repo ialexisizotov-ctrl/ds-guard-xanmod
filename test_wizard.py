@@ -362,6 +362,7 @@ class InputTests(LocalCase):
                 ("1", ["--mode", "full"]),
                 ("2", ["--mode", "kernel", "--kernel-policy", "xanmod"]),
                 ("4", ["--mode", "guard"]),
+                ("11", ["--mode", "full", "--kernel-policy", "keep"]),
                 ("10", ["--mode", "kernel", "--kernel-policy", "ubuntu"])):
             with self.subTest(answer=answer), mock.patch.object(w, "ask", return_value=answer):
                 self.assertEqual(w.selection(), expected)
@@ -1088,6 +1089,7 @@ class FallbackSelectionTests(LocalCase):
 
     def test_new_kernel_prepares_fallback(self):
         command = self.patch(w,"run",return_value=types.SimpleNamespace(returncode=0,stdout='{"current":"old","selected":"new"}',stderr=""))
+        self.patch(w.boot, "environment_backend", return_value={"filesystem": "ext2", "abstraction": ""})
         prepare = self.patch(w.boot,"ensure_fallback",return_value={"fallback":"old"})
         REAL_PREPARE_FALLBACK(Path("/bundle"),["--mode","kernel","--kernel-policy","ubuntu"])
         prepare.assert_called_once_with()
@@ -1100,6 +1102,128 @@ class FallbackSelectionTests(LocalCase):
         prepare = self.patch(w.boot,"ensure_fallback")
         with self.assertRaises(w.Refusal):
             REAL_PREPARE_FALLBACK(Path("/bundle"),["--mode","full"])
+        prepare.assert_not_called()
+
+
+class CurrentKernelFallbackTests(LocalCase):
+    def readiness(self, **changes):
+        return {"kernel": "7.0.0-34-generic", "compatible": True,
+                "prebuilt_present": True, "errors": [], **changes}
+
+    def select_new(self):
+        self.patch(w, "run", return_value=types.SimpleNamespace(
+            returncode=0, stdout='{"current":"7.0.0-34-generic","selected":"new"}', stderr=""))
+        self.patch(w.boot, "environment_backend",
+                   side_effect=w.boot.UnsupportedStorage("RAID1"))
+        return self.patch(w.boot, "ensure_fallback")
+
+    def test_raid_offer_changes_only_kernel_policy_after_explicit_choice(self):
+        prepare = self.select_new()
+        self.patch(w, "current_kernel_readiness", return_value=self.readiness())
+        ask = self.patch(w, "ask", return_value="1")
+        args = ["--mode", "full", "--kernel-policy", "xanmod", "--tuning", "keep"]
+        self.assertTrue(REAL_PREPARE_FALLBACK(self.root, args))
+        self.assertEqual(args, ["--mode", "full", "--kernel-policy", "keep", "--tuning", "keep"])
+        self.assertEqual(ask.call_args.kwargs["noninteractive"], "unavailable")
+        prepare.assert_not_called()
+
+    def test_raid_cancel_does_not_change_arguments_or_boot(self):
+        prepare = self.select_new()
+        self.patch(w, "current_kernel_readiness", return_value=self.readiness())
+        self.patch(w, "ask", return_value="0")
+        args = ["--mode", "full"]
+        self.assertFalse(REAL_PREPARE_FALLBACK(self.root, args))
+        self.assertEqual(args, ["--mode", "full"])
+        prepare.assert_not_called()
+
+    def test_missing_tty_does_not_install_implicitly(self):
+        prepare = self.select_new()
+        self.patch(w, "current_kernel_readiness", return_value=self.readiness())
+        self.stack.enter_context(mock.patch("builtins.open", side_effect=OSError("no tty")))
+        args = ["--mode", "full"]
+        with self.assertRaises(w.Refusal):
+            REAL_PREPARE_FALLBACK(self.root, args)
+        self.assertEqual(args, ["--mode", "full"])
+        prepare.assert_not_called()
+
+    def test_unadmitted_or_incomplete_current_kernel_never_offered(self):
+        prepare = self.select_new()
+        ask = self.patch(w, "ask")
+        for changes in ({"compatible":False}, {"prebuilt_present":False},
+                        {"errors":["lockdown"]}):
+            with self.subTest(changes=changes), mock.patch.object(
+                    w, "current_kernel_readiness", return_value=self.readiness(**changes)):
+                args = ["--mode","full"]
+                with self.assertRaises(w.Refusal):
+                    REAL_PREPARE_FALLBACK(self.root, args)
+                self.assertEqual(args, ["--mode","full"])
+        ask.assert_not_called()
+        prepare.assert_not_called()
+
+    def test_kernel_only_does_not_turn_into_full_install(self):
+        prepare = self.select_new()
+        readiness = self.patch(w, "current_kernel_readiness")
+        ask = self.patch(w, "ask")
+        with self.assertRaises(w.Refusal):
+            REAL_PREPARE_FALLBACK(self.root, ["--mode","kernel"])
+        readiness.assert_not_called()
+        ask.assert_not_called()
+        prepare.assert_not_called()
+
+    def test_unknown_boot_probe_failure_is_not_silently_bypassed(self):
+        prepare = self.select_new()
+        self.patch(w.boot, "environment_backend", side_effect=w.boot.Refusal("probe failed"))
+        offer = self.patch(w, "offer_current_kernel")
+        with self.assertRaises(w.boot.Refusal):
+            REAL_PREPARE_FALLBACK(self.root, ["--mode","full"])
+        offer.assert_not_called()
+        prepare.assert_not_called()
+
+    def test_failure_after_boot_writes_never_offers_fallback(self):
+        self.select_new()
+        self.patch(w.boot, "environment_backend", return_value={})
+        self.patch(w.boot, "ensure_fallback", side_effect=w.boot.Refusal("partial write"))
+        offer = self.patch(w, "offer_current_kernel")
+        with self.assertRaises(w.boot.Refusal):
+            REAL_PREPARE_FALLBACK(self.root, ["--mode","full"])
+        offer.assert_not_called()
+
+    def test_readiness_validates_kernel_and_shape(self):
+        self.patch(w.platform, "release", return_value="7.0.0-34-generic")
+        for changes in ({}, {"kernel":"another"}, {"errors":"not a list"},
+                        {"compatible":1}, {"prebuilt_present":None}):
+            with self.subTest(changes=changes), mock.patch.object(
+                    w, "run", return_value=types.SimpleNamespace(returncode=0,
+                    stdout=json.dumps(self.readiness(**changes)), stderr="")):
+                if not changes:
+                    self.assertEqual(w.current_kernel_readiness(self.root), self.readiness())
+                else:
+                    with self.assertRaises(w.Refusal):
+                        w.current_kernel_readiness(self.root)
+
+    def test_main_cancel_never_runs_setup_or_boot(self):
+        self.patch(w, "bundle", return_value=self.root)
+        self.patch(w.boot, "inspect", return_value={"status":"none"})
+        self.patch(w, "handle_trial", return_value=None)
+        self.patch(w, "prepare_install_fallback", return_value=False)
+        setup = self.patch(w, "setup")
+        arm = self.patch(w.boot, "arm")
+        self.assertEqual(w.main(["--mode","full"]), 0)
+        setup.assert_not_called()
+        arm.assert_not_called()
+
+    def test_no_catalog_candidate_can_offer_admitted_current_kernel(self):
+        self.patch(w, "run", return_value=types.SimpleNamespace(returncode=0,
+            stdout='{"current":"7.0.0-34-generic","selection_error":"no catalog candidate"}',
+            stderr=""))
+        self.patch(w, "current_kernel_readiness", return_value=self.readiness())
+        self.patch(w, "ask", return_value="1")
+        probe = self.patch(w.boot, "environment_backend")
+        prepare = self.patch(w.boot, "ensure_fallback")
+        args = ["--mode","full"]
+        self.assertTrue(REAL_PREPARE_FALLBACK(self.root,args))
+        self.assertEqual(args,["--mode","full","--kernel-policy","keep"])
+        probe.assert_not_called()
         prepare.assert_not_called()
 
 

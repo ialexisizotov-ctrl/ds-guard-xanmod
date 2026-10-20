@@ -16,7 +16,7 @@ def assess(kernel, config, os_id, arch, container, lockdown, free, available):
     if container: errors.append('Нужно собственное ядро сервера; контейнеры и WSL не поддерживаются')
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._+~-]{0,127}', kernel): errors.append('Недопустимое имя ядра')
     # A successful compile does not prove that a replacement conntrack destructor is safe.
-    if kernel not in ('6.8.0-87-generic', '6.8.0-147-generic', '7.0.12-x64v2-dsg1-xanmod1', '7.2.9-x64v3-dsg1-xanmod1'):
+    if kernel not in ('6.8.0-87-generic', '6.8.0-147-generic', '7.0.0-34-generic', '7.0.12-x64v2-dsg1-xanmod1', '7.2.9-x64v3-dsg1-xanmod1'):
         errors.append('Это точное ядро не прошло проверку совместимости данного выпуска')
     for flag in ('CONFIG_MODULES', 'CONFIG_NETFILTER', 'CONFIG_NF_CONNTRACK', 'CONFIG_LIVEPATCH'):
         if not re.search(r'^' + flag + r'=[ym]$', config, re.M): errors.append('В ядре требуется ' + flag)

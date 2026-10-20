@@ -86,7 +86,7 @@ build_ndpi(){
 # unreviewed destructor on a new major/minor release or replace the host kernel.
 ndpi_kprep(){
   local k="${1:-}"
-  case "$k" in 6.8.0-87-generic|6.8.0-147-generic|7.0.12-x64v2-dsg1-xanmod1|7.2.9-x64v3-dsg1-xanmod1) ;; *) logger -t ds-guard 'Kernel requires compatibility review'; return 1;; esac
+  case "$k" in 6.8.0-87-generic|6.8.0-147-generic|7.0.0-34-generic|7.0.12-x64v2-dsg1-xanmod1|7.2.9-x64v3-dsg1-xanmod1) ;; *) logger -t ds-guard 'Kernel requires compatibility review'; return 1;; esac
   grep -qs '^CONFIG_LIVEPATCH=y$' "/boot/config-$k" || return 1
   [ -d "/lib/modules/$k/build" ] || return 1
   ndpi_lock 0 || return 1

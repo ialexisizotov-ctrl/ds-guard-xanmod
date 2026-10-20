@@ -36,7 +36,7 @@ Environment=NEEDRESTART_SUSPEND=1
 ExecStartPre=-/usr/local/sbin/ds-guard-ensure.sh
 ExecStart=/usr/local/sbin/ds-guard-apply.sh
 '''
-SUPPORTED={'6.8.0-87-generic':'22.04','6.8.0-147-generic':'24.04','7.0.12-x64v2-dsg1-xanmod1':'24.04','7.2.9-x64v3-dsg1-xanmod1':'24.04'}
+SUPPORTED={'6.8.0-87-generic':'22.04','6.8.0-147-generic':'24.04','7.0.0-34-generic':'24.04','7.0.12-x64v2-dsg1-xanmod1':'24.04','7.2.9-x64v3-dsg1-xanmod1':'24.04'}
 FAULT=re.compile(r'BUG:|UBSAN:|Oops:|Kernel panic|WARNING: CPU|Out of memory|Killed process|KASAN:')
 
 def path(p):return SYSTEM_ROOT/str(p).lstrip('/')

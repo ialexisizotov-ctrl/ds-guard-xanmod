@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "release": "v1.7.11-dsg2-rc5",
+  "release": "v1.7.11-dsg2-rc6",
   "status": "LOCAL_VALIDATION_PASS",
   "core_tests": {
     "tests": 260,
@@ -8,11 +8,78 @@
     "errors": 0,
     "skipped": 0
   },
-  "kernel_and_module_binaries_changed": false,
-  "previous_release": "v1.7.11-dsg2-rc4",
+  "previous_release": "v1.7.11-dsg2-rc5",
+  "new_exact_abi": "7.0.0-34-generic",
+  "kernel_catalog_unchanged": true,
+  "previous_module_binaries_unchanged": true,
+  "new_module_sha256": "282bb1aa4ecb559d9a73998d3baeeff89b608adc342dee0b968e56567b293c78",
+  "source_contract": {
+    "kernel": "7.0.0-34-generic",
+    "package_version": "7.0.0-34.34~24.04.1",
+    "source_publication": "https://api.launchpad.net/1.0/ubuntu/+archive/primary/+sourcepub/18752323",
+    "orig_sha256": "c6343795c8c7e4feff55f5b309365c8e0eaf49cd6abcb412e32315313f149536",
+    "diff_sha256": "81b9d83f6863ea9d41bde191923134fe6bf4261bfcf94a376b85c094fafd6c32",
+    "original_core_sha256": "ebbad8049b3eb4d535edcd80a25110f53c7bde4329bb4121206591446080a840",
+    "ubuntu_core_patch_starts": [
+      1814
+    ],
+    "destructor_last_line": 599,
+    "destructor_and_GRE_match_after_isolating_ndpi_callback": true,
+    "ndpi_callback_preserved": true,
+    "new_source_patch_required": false,
+    "runtime_acceptance_required": true
+  },
+  "vm_install_and_repeat": true,
+  "vm_cold_boot": true,
+  "vm_payload": {
+    "allowed_dns": {
+      "response": true,
+      "rcode": 0
+    },
+    "blocked_dns": {
+      "response": false,
+      "local_policy_denied": true
+    },
+    "ndpi": {
+      "packets_sent": 3,
+      "exact_socket_rule": [
+        "[3:252] -A OUTPUT -d 10.0.2.2/32 -p udp -m udp --sport 49525 --dport 59991 -m ndpi --proto bittorrent -m comment --comment codex-dsguard-probe -j DROP"
+      ],
+      "detected": true,
+      "cleanup_rc": 0,
+      "no_probe_rules_remaining": true
+    },
+    "suricata_test_events": [
+      {
+        "signature_id": 9000003,
+        "action": "blocked"
+      }
+    ],
+    "suricata_blocked": true,
+    "passed": true
+  },
+  "vm_tls_stress": {
+    "kernel": "7.0.0-34-generic",
+    "connections": 600,
+    "server_completed": 600,
+    "certificate_der_bytes": 14316,
+    "payload_per_connection": 16384,
+    "strict_local_certificate_validation": true,
+    "ndpi_tls_rule_counters": [
+      "[5410:481120] -A INPUT -i dsgavhost -p tcp -m tcp --dport 59993 -m ndpi --proto tls -m comment --comment dsg-allocator-vm-test -j ACCEPT",
+      "[5992:19133584] -A OUTPUT -o dsgavhost -p tcp -m tcp --sport 59993 -m ndpi --proto tls -m comment --comment dsg-allocator-vm-test -j ACCEPT"
+    ],
+    "kfence_interval_ms": 1,
+    "seconds": 22.09,
+    "kernel_faults": [],
+    "passed": true,
+    "temporary_rules_and_network_removed": true
+  },
+  "production_verified_at_freeze": false,
   "all_servers_accepted": false,
-  "scope": "Measured first-touch sysctl baseline only after verified fresh kernel staging; original journal immutable.",
-  "wizard_version": "1.0.0-rc5",
-  "payload_archive_sha256": "8970d7396d7db2d1683431e6f199739bb65dfe39240bfceee5c5941366221ea2",
-  "payload_manifest_sha256": "ecb74540d41119fd53f10047115a2128802c931fd7e316b997acf3d85c6a6d2c"
+  "scope": "Explicit keep-current-kernel menu/fallback and one exact Ubuntu ABI; no automatic RAID boot attempt.",
+  "wizard_version": "1.0.0-rc6",
+  "wizard_test_count": 190,
+  "payload_archive_sha256": "03f36629175224ae31a2595709d47b4ec61f9646f20aaf51909fe7a54d22954d",
+  "payload_manifest_sha256": "b5d0a339624f3b9fd2167b74cc2033d698f00294beaa766ade22cffe2204e7f4"
 }

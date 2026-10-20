@@ -44,6 +44,11 @@ class Refusal(RuntimeError):
     pass
 
 
+class UnsupportedStorage(Refusal):
+    """Read-only detection: GRUB cannot safely consume a one-shot choice."""
+    pass
+
+
 def run(argv, check=True, timeout=30):
     p = subprocess.run(argv, text=True, capture_output=True, timeout=timeout)
     if check and p.returncode:
@@ -228,7 +233,7 @@ def environment_backend():
                       'Автоматическая пробная загрузка остановлена; '
                       'используйте консоль хостера для ручного выбора ядра.') from exc
     if filesystem != 'ext2' or abstraction:
-        raise Refusal('Автоматическая пробная загрузка поддерживает только обычный '
+        raise UnsupportedStorage('Автоматическая пробная загрузка поддерживает только обычный '
                       'раздел ext2/ext3/ext4 без LVM, RAID и других промежуточных слоёв. '
                       'GRUB обнаружил файловую систему '+repr(filesystem)
                       +' и слой '+repr(abstraction)+'. Используйте консоль хостера '
