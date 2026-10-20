@@ -3,6 +3,7 @@
 All mutations are confined to TemporaryDirectory; system commands are mocked.
 """
 import json
+import copy
 import tempfile
 import unittest
 from pathlib import Path
@@ -218,6 +219,105 @@ class LifecycleOwnership(unittest.TestCase):
         self.assertEqual(len(pending['operation_id']), 36)
         self.assertEqual(lifecycle.package_ownership(current['packages']),
                          {'guard-dependency': '2'})
+
+    def drifted_journal(self):
+        before = record({'base': '1', 'old-kernel': '1'})
+        after = record({'base': '2', 'new-kernel': '2', 'guard-dependency': '2'},
+                       {'guard-dependency': '2'})
+        current = record({'base': '3', 'new-kernel': '2', 'admin': '9',
+                          'guard-dependency': '2'}, {'guard-dependency': '2'})
+        self.write('before.json', before)
+        self.write('after.json', after)
+        return before, after, current
+
+    def test_repeat_and_seal_preserve_unowned_upgrade_add_remove_and_original_bytes(self):
+        before, after, current = self.drifted_journal()
+        original = (self.state / 'before.json').read_bytes()
+        current['manual'] = ['admin']
+        with patch.object(lifecycle, 'snapshot', return_value=current), \
+                patch.object(lifecycle, 'run', return_value='') as run:
+            lifecycle.begin()
+            pending = json.loads((self.state / 'pending.json').read_text())
+            self.assertEqual(pending['packages_before'], current['packages'])
+            self.assertEqual(lifecycle.package_ownership(current['packages']), {'guard-dependency': '2'})
+            lifecycle.seal(0)
+            self.assertFalse((self.state / 'pending.json').exists())
+            saved = json.loads((self.state / 'after.json').read_text())
+            self.assertEqual(saved['packages'], current['packages'])
+            self.assertEqual(saved['owned_packages'], {'guard-dependency': '2'})
+            self.assertEqual(saved['manual'], after['manual'])
+            lifecycle.verify_repeat_baseline(before, saved, current)
+            self.assertFalse(any(c.args[0][0] in ('apt-get', 'dpkg', 'apt-mark') for c in run.call_args_list))
+        self.assertEqual((self.state / 'before.json').read_bytes(), original)
+
+    def test_removal_plan_excludes_unowned_upgrades_new_and_removed_kernels(self):
+        _, _, current = self.drifted_journal()
+        original = (self.state / 'before.json').read_bytes()
+        commands = []
+
+        def run(args, *unused, **kwargs):
+            commands.append(args)
+            if args[:3] == ['apt-get', '-s', 'purge']:
+                return 'Purg guard-dependency [2]'
+            return ''
+
+        with patch.object(lifecycle, 'snapshot', return_value=current), \
+                patch.object(lifecycle, 'run', side_effect=run):
+            plan = lifecycle.removal_plan()
+        self.assertEqual(plan[3], ['guard-dependency'])
+        self.assertEqual(plan[4:], ([], []))
+        self.assertEqual([c for c in commands if c[0] == 'apt-get'],
+                         [['apt-get', '-s', 'purge', 'guard-dependency']])
+        self.assertEqual((self.state / 'before.json').read_bytes(), original)
+
+    def test_repeat_and_remove_refuse_owned_version_drift_and_baseline_collision(self):
+        for kind in ('saved-version', 'live-version', 'baseline-collision'):
+            with self.subTest(kind=kind):
+                before, after, current = self.drifted_journal()
+                if kind == 'saved-version':
+                    after['packages']['guard-dependency'] = '9'
+                elif kind == 'live-version':
+                    current['packages']['guard-dependency'] = '9'
+                else:
+                    after['owned_packages']['base'] = '2'
+                self.write('after.json', after)
+                original = (self.state / 'before.json').read_bytes()
+                with patch.object(lifecycle, 'snapshot', return_value=current), \
+                        patch.object(lifecycle, 'run', return_value='') as run:
+                    with self.assertRaises(RuntimeError):
+                        lifecycle.begin()
+                    self.assertFalse((self.state / 'pending.json').exists())
+                    with self.assertRaises(RuntimeError):
+                        lifecycle.removal_plan()
+                    self.assertFalse(any(c.args[0][0] == 'apt-get' for c in run.call_args_list))
+                self.assertEqual((self.state / 'before.json').read_bytes(), original)
+
+    def test_absent_owned_package_allows_removal_resume_without_new_ownership(self):
+        before, after, current = self.drifted_journal()
+        del current['packages']['guard-dependency']
+        untouched = copy.deepcopy([before, after, current])
+        lifecycle.verify_no_conflict(before, after, current)
+        with patch.object(lifecycle, 'snapshot', return_value=current), \
+                patch.object(lifecycle, 'run', return_value='') as run:
+            self.assertEqual(lifecycle.removal_plan()[3], [])
+            self.assertFalse(any(c.args[0][0] == 'apt-get' for c in run.call_args_list))
+        self.assertEqual([before, after, current], untouched)
+
+    def test_unowned_package_drift_does_not_relax_other_repeat_conflicts(self):
+        before, after, current = self.drifted_journal()
+        for kind in ('file', 'value', 'firewall'):
+            b, a, now = copy.deepcopy([before, after, current])
+            with self.subTest(kind=kind):
+                if kind == 'file':
+                    b['files'] = a['files'] = {'/foreign': 'original'}
+                    now['files'] = {'/foreign': 'changed'}
+                elif kind == 'value':
+                    b['values'] = a['values'] = {'foreign': '1'}
+                    now['values'] = {'foreign': '2'}
+                else:
+                    now['iptables'] = '*filter\n:DS_DOMAINS - [0:0]\nCOMMIT\n'
+                with self.assertRaises(RuntimeError):
+                    lifecycle.verify_repeat_baseline(b, a, now)
 
     def test_new_module_default_is_observed_without_claiming_ownership(self):
         before, after = self.journal()

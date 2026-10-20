@@ -1,0 +1,53 @@
+{
+  "schema": 1,
+  "release": "v1.7.11-dsg2-rc4",
+  "wizard_version": "1.0.0-rc2",
+  "status": "LOCAL_VALIDATION_ONLY_PRODUCTION_ACCEPTANCE_PENDING",
+  "core_tests": {
+    "tests": 256,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "wizard_tests": {
+    "tests": 136,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "syntax": {
+    "core": {
+      "python_compile": 40,
+      "bash_syntax": 10
+    },
+    "wizard": {
+      "python_compile": 4,
+      "bash_syntax": 1
+    }
+  },
+  "boot_helper_sha256": "ed0e3c682ed01ed325bba442bef462ba1ac841a6b0a129373f5c5f5645456ab9",
+  "kernel_assets_changed": false,
+  "boot_helper_changed": false,
+  "production_installation_accepted": false,
+  "public_subscription_accepted": false,
+  "all_servers_accepted": false,
+  "external_watchdog_reset_proven": false,
+  "bounded_local_integration": {
+    "suricata_guard": "real systemd with a temporary surrogate unit",
+    "suricata_config_test": "mocked success; real suricata -T not executed",
+    "whole_machine_reboot_tested": false,
+    "power_failure_tested": false,
+    "signed_suricata_deb": "signed index verified; downloaded and inspected only; not installed",
+    "partial_dpkg_without_yaml_backup": "hold retained; rollback remains incomplete"
+  },
+  "changes": [
+    "Missing dependencies use private signed official Ubuntu indexes for the detected supported OS.",
+    "The first Suricata installation is guarded against premature service startup.",
+    "Read-only menu status/check results cannot enter kernel-stage or reboot handling."
+  ],
+  "limits": [
+    "Previous rc3 and wizard-rc1 laboratory evidence applies only to those exact versions.",
+    "An existing direct-node baseline is not acceptance of this updated installation.",
+    "A software boot helper cannot reset a machine hung before systemd without an independent reset mechanism."
+  ]
+}

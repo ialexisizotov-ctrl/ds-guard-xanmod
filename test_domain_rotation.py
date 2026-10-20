@@ -29,7 +29,8 @@ def record(bank='A'):
     files={p:{'sha256':hashlib.sha256(p.encode()).hexdigest(),'mode':0o644} for p in dr.INPUTS}
     files[dr.GENERATION]={'sha256':hashlib.sha256(text.encode()).hexdigest(),'mode':0o600}
     return {'files':files,'file_owners':{p:[0,0] for p in files},'generation_text':text,
-            'iptables':firewall(bank),'values':{},'packages':{},'baseline_kind':'legacy-upgrade'}
+            'iptables':firewall(bank),'values':{},'packages':{},'baseline_kind':'legacy-upgrade',
+            'ownership_schema':1,'owned_packages':{}}
 
 
 class RotationProof(unittest.TestCase):

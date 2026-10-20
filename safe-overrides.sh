@@ -19,24 +19,15 @@ ndpi_plugin_fits(){
 ensure_repos(){ :; } # Never rewrite the server's repository configuration.
 install_header_meta(){ :; } # Never pull a new kernel indirectly.
 apt_install(){
- local package
- local -a missing=()
-  for package in "$@"; do
-  [ "$(dpkg-query -W -f='${db:Status-Status}' "$package" 2>/dev/null)" = installed ] || missing+=("$package")
-  done
- [ "${#missing[@]}" -gt 0 ] || return 0
-  if [ "${DS_APT_UPDATED:-0}" != 1 ]; then
-    timeout 300 apt-get $APT_NET_OPTS -o DPkg::Lock::Timeout=120 update >>"$LOG" 2>&1 || return 1
-    DS_APT_UPDATED=1
-  fi
  local rc=0
- python3 "$DS_SAFE_ROOT/package_transactions.py" --timeout 600 -- apt-get $APT_NET_OPTS -o DPkg::Lock::Timeout=120 -y --no-remove --no-upgrade install "${missing[@]}" >>"$LOG" 2>&1 || rc=$?
+ python3 "$DS_SAFE_ROOT/ubuntu_apt.py" --transaction "${DS_TXN:-}" "$@" >>"$LOG" 2>&1 || rc=$?
  if [ "$rc" = 124 ]; then
   [ -n "${DS_TXN:-}" ] && : >"$DS_TXN/package-timeout"
  fi
  return "$rc"
 }
 suricata_install(){
+  python3 "$DS_TXN/transaction.py" suricata-arm "$DS_TXN" || return 1
   apt_install suricata || return 1
   python3 "$DS_SAFE_ROOT/transaction.py" capture-package-default "$DS_TXN"
 }
@@ -102,3 +93,4 @@ ndpi_kprep(){
   timeout 25m dkms build -m ndpi -v "$NDPI_DKMS_VERSION" -k "$k" && timeout 5m dkms install -m ndpi -v "$NDPI_DKMS_VERSION" -k "$k" --force
   local rc=$?; ndpi_unlock; return "$rc"
 }
+. "$DS_SAFE_ROOT/suricata-setup.sh"

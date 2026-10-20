@@ -2,9 +2,9 @@
 # A release builder replaces these two literals after all acceptance gates.
 set -euo pipefail
 umask 077
-echo '[КАНДИДАТ] Предварительный выпуск. Стендовые проверки не заменяют приёмку на вашем сервере.'
-release='v1.7.11-dsg2-rc3'
-expected='e0541642f89f961bd5c9a8e7039717ee66b2f53d09b40cfd791c43b3610c8208'
+echo '[КАНДИДАТ] Предварительный выпуск; production-приёмка ещё не завершена.'
+release='v1.7.11-dsg2-rc4'
+expected='b77dd6b4f11ac863f5c3fbc2a30c54b19ddb61a80eb646a96779ec49abfb552e'
 [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || { echo '[ОСТАНОВЛЕНО] Принятого релиза пока нет. Предыдущий выпуск отозван; установка не начата.'; exit 78; }
 [ "$(id -u)" = 0 ] || { echo '[ОШИБКА] Запустите установщик с правами root.'; exit 77; }
 work=$(mktemp -d /var/tmp/ds-guard-download.XXXXXXXX)

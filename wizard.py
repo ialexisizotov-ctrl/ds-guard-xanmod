@@ -21,10 +21,12 @@ import time
 sys.dont_write_bytecode = True
 import boot_trial as boot
 
-VERSION = "1.0.0-rc1"
-RELEASE = "v1.7.11-dsg2-rc3"
-ARCHIVE_SHA = "e0541642f89f961bd5c9a8e7039717ee66b2f53d09b40cfd791c43b3610c8208"
-MANIFEST_SHA = "dadc9e3e2c8ffd509a26aa94e082d62385aae9f32e7782b1d8cbec51675a502e"
+VERSION = '1.0.0-rc2'
+RELEASE = 'v1.7.11-dsg2-rc4'
+ARCHIVE_SHA = 'b77dd6b4f11ac863f5c3fbc2a30c54b19ddb61a80eb646a96779ec49abfb552e'
+MANIFEST_SHA = '7389c5adf29a37360735e0351c22572fbf448d3a7ea918c6d6c1bfb5a71ff48c'
+PAYLOAD_FILES = 80
+ARCHIVE_MEMBERS = 81
 URL = ("https://github.com/ialexisizotov-ctrl/ds-guard-xanmod/releases/download/"
        + RELEASE + "/ds-guard-safe-" + RELEASE + ".tar.gz")
 CACHE = Path("/var/cache/ds-guard-wizard")
@@ -115,7 +117,7 @@ def verify_bundle(directory):
     directory = Path(directory)
     secure_dir(directory)
     manifest = secure_file(directory / "SHA256SUMS")
-    require(sha(manifest) == MANIFEST_SHA, "Изменён manifest закреплённого rc3.")
+    require(sha(manifest) == MANIFEST_SHA, "Изменён manifest закреплённого комплекта.")
     names = set()
     for line in manifest.read_text().splitlines():
         m = re.fullmatch(r"([0-9a-f]{64})  ([^\r\n]+)", line)
@@ -132,7 +134,7 @@ def verify_bundle(directory):
             require(not parent.is_symlink(), "Ссылка внутри комплекта.")
         file = secure_file(directory / name)
         require(sha(file) == digest, "Контрольная сумма не совпала: " + name)
-    require(len(names) == 75, "Неожиданный состав rc3.")
+    require(len(names) == PAYLOAD_FILES, "Неожиданный состав комплекта.")
     all_paths = list(directory.rglob("*"))
     require(not any(p.is_symlink() for p in all_paths), "Ссылка внутри комплекта.")
     actual = {str(p.relative_to(directory)).replace(os.sep, "/") for p in all_paths if p.is_file()}
@@ -147,7 +149,7 @@ def extract_bundle(archive, destination):
             "Каталог распаковки уже занят. Запись не начата.")
     with tarfile.open(archive, "r:gz") as source:
         members = source.getmembers()
-        require(len(members) == 76, "Неожиданный состав архива rc3.")
+        require(len(members) == ARCHIVE_MEMBERS, "Неожиданный состав архива.")
         names = set()
         total = 0
         for item in members:
@@ -172,11 +174,16 @@ def extract_bundle(archive, destination):
 
 
 def bundle():
+    require(re.fullmatch(r"[0-9a-f]{64}", ARCHIVE_SHA) is not None and
+            re.fullmatch(r"[0-9a-f]{64}", MANIFEST_SHA) is not None and
+            PAYLOAD_FILES > 0 and ARCHIVE_MEMBERS == PAYLOAD_FILES + 1,
+            "Сборка мастера ещё не опубликована: закреплённый комплект отсутствует.")
     secure_dir(CACHE)
     directory = CACHE / RELEASE
     if directory.exists() or directory.is_symlink():
         return verify_bundle(directory)
-    print("[ЗАГРУЗКА] Проверенный комплект rc3; версия ядра и модуля не подменяется.")
+    print("[ЗАГРУЗКА] Закреплённый комплект " + RELEASE +
+          "; версия ядра и модуля не подменяется.")
     with tempfile.TemporaryDirectory(prefix="fetch-", dir=CACHE) as temp:
         archive = Path(temp) / "release.tar.gz"
         result = run(["curl", "--proto", "=https", "--proto-redir", "=https",
@@ -547,6 +554,13 @@ def main(argv=None):
         if args is None:
             return 0
         mode = args[args.index("--mode") + 1]
+        if mode in ("status", "check"):
+            # A status query can return 20 merely because an older invocation
+            # staged a kernel. Preserve that result without treating this
+            # read-only menu choice as a new install or boot-stage operation.
+            if mode == "status":
+                display_status(boot.inspect())
+            return setup(directory, args)
         trial = boot.inspect()
         if mode in ("remove", "rollback-upgrade") and trial and trial.get("status") == "confirmed":
             boot.cancel()

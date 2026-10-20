@@ -39,7 +39,8 @@ class LegacyEntryGate(unittest.TestCase):
     def test_cold_resume_accepts_only_disappeared_legacy_rules(self):
         rule='-A OUTPUT -o eth0 -j DS_DOMAINS'
         wrap=lambda rules:'*filter\n:OUTPUT ACCEPT [0:0]\n:DS_DOMAINS - [0:0]\n'+rules+'\nCOMMIT'
-        b={'files':{},'values':{},'packages':{},'iptables':wrap(rule),'baseline_kind':'legacy-upgrade'}
+        b={'files':{},'values':{},'packages':{},'iptables':wrap(rule),'baseline_kind':'legacy-upgrade',
+           'ownership_schema':1,'owned_packages':{}}
         a=dict(b);current={**a,'iptables':wrap('')}
         with self.assertRaises(RuntimeError):lifecycle.verify_no_conflict(b,a,current)
         lifecycle.verify_no_conflict(b,a,current,legacy_cold_boot=True)

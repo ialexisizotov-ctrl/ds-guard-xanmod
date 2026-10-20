@@ -36,6 +36,10 @@ class LocalCase(unittest.TestCase):
         self.stack.enter_context(mock.patch.object(w, "STATE", self.root / "state"))
         self.stack.enter_context(mock.patch.object(w, "CACHE", self.root / "cache"))
         self.stack.enter_context(mock.patch.object(w, "RC3_STATE", self.root / "rc3"))
+        self.stack.enter_context(mock.patch.object(w, "PAYLOAD_FILES", 75))
+        self.stack.enter_context(mock.patch.object(w, "ARCHIVE_MEMBERS", 76))
+        self.stack.enter_context(mock.patch.object(w, "ARCHIVE_SHA", "1" * 64))
+        self.stack.enter_context(mock.patch.object(w, "MANIFEST_SHA", "2" * 64))
 
     def patch(self, target, name, **kwargs):
         return self.stack.enter_context(mock.patch.object(target, name, **kwargs))
@@ -140,6 +144,14 @@ class LocalCase(unittest.TestCase):
 
 
 class BundleTests(LocalCase):
+    def test_unbuilt_template_refuses_before_downloading_or_cache_creation(self):
+        self.patch(w, "ARCHIVE_SHA", new="UNRELEASED")
+        command = self.patch(w, "run")
+        with self.assertRaises(w.Refusal):
+            w.bundle()
+        command.assert_not_called()
+        self.assertFalse(w.CACHE.exists())
+
     def test_complete_fixture_verifies(self):
         directory = self.bundle_fixture()
         self.assertEqual(w.verify_bundle(directory), directory)
@@ -708,6 +720,67 @@ class FlowTests(LocalCase):
         self.assertEqual(env["PATH"], "/usr/sbin:/usr/bin:/sbin:/bin")
         self.assertEqual(env["SSH_CONNECTION"], poisoned["SSH_CONNECTION"])
         self.assertEqual(receipt.call_args.args[1]["returncode"], 20)
+
+
+class ReadOnlyMenuTests(LocalCase):
+    def menu_fixture(self, choice, returncode):
+        setup, prepare, arm, cancel = self.main_fixture(setup_rc=returncode)
+        self.patch(w, "ask", return_value=choice)
+        snapshot = self.patch(w, "stage_signatures",
+                              side_effect=AssertionError("Read-only mode inspected stage provenance"))
+        provenance = self.patch(w, "proven_stage")
+        offer = self.patch(w, "offer_reboot")
+        cleanup = self.patch(w.boot, "cleanup_after_remove")
+        return setup, prepare, arm, cancel, snapshot, provenance, offer, cleanup
+
+    def test_menu_status_code20_is_returned_without_boot_stage_message(self):
+        setup, *mutations = self.menu_fixture("6", 20)
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(w.main([]), 20)
+        setup.assert_called_once_with(self.root / "bundle", ["--mode", "status"])
+        self.assertNotIn("[ОТДЕЛЬНАЯ ПЕРЕЗАГРУЗКА]", output.getvalue())
+        for operation in mutations:
+            operation.assert_not_called()
+
+    def test_menu_check_code20_is_returned_without_boot_stage_message(self):
+        setup, *mutations = self.menu_fixture("5", 20)
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(w.main([]), 20)
+        setup.assert_called_once_with(self.root / "bundle", ["--mode", "check"])
+        self.assertNotIn("[ОТДЕЛЬНАЯ ПЕРЕЗАГРУЗКА]", output.getvalue())
+        for operation in mutations:
+            operation.assert_not_called()
+
+    def test_menu_status_displays_boot_status_but_does_not_change_it(self):
+        setup, *mutations = self.menu_fixture("6", 0)
+        display = self.patch(w, "display_status")
+        self.assertEqual(w.main([]), 0)
+        display.assert_called_once_with({"status": "none"})
+        setup.assert_called_once_with(self.root / "bundle", ["--mode", "status"])
+        for operation in mutations:
+            operation.assert_not_called()
+
+    def test_menu_status_preserves_failure_without_examining_staged_receipts(self):
+        setup, *mutations = self.menu_fixture("6", 78)
+        self.assertEqual(w.main([]), 78)
+        setup.assert_called_once()
+        for operation in mutations:
+            operation.assert_not_called()
+
+    def test_explicit_status_code20_remains_read_only_with_pending_trial(self):
+        setup, prepare, arm, cancel = self.main_fixture(self.trial("armed"), setup_rc=20)
+        handle = self.patch(w, "handle_trial", side_effect=AssertionError("Status resumed a trial"))
+        snapshot = self.patch(w, "stage_signatures")
+        provenance = self.patch(w, "proven_stage")
+        output = io.StringIO()
+        with redirect_stdout(output):
+            self.assertEqual(w.main(["--mode", "status"]), 20)
+        setup.assert_called_once_with(self.root / "bundle", ["--mode", "status"])
+        self.assertNotIn("[ОТДЕЛЬНАЯ ПЕРЕЗАГРУЗКА]", output.getvalue())
+        for operation in (prepare, arm, cancel, handle, snapshot, provenance):
+            operation.assert_not_called()
 
 
 class RecoveryMenuTests(LocalCase):

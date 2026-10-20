@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Scoped, local transaction records. Never restore a global firewall snapshot."""
-import collections, fcntl, glob, hashlib, json, os, re, shlex, shutil, subprocess, sys, time
+import collections, fcntl, glob, hashlib, json, os, re, shlex, shutil, stat, subprocess, sys, time, uuid
 from pathlib import Path
 
 BASE=Path('/var/lib/ds-guard-safe/transactions')
 CHAINS={'DS_DOMAINS','DS_DOM_A','DS_DOM_B','DS_DOM_A_D','DS_DOM_A_W','DS_DOM_B_D','DS_DOM_B_W'}
 UNITS=['ds-guard.timer','ds-guard.service','ds-guard-apply.service','suricata.service']
+SURICATA_HOLD=Path('/etc/systemd/system/suricata.service.d/97-safe-initial-install.conf')
+SURICATA_YAML=Path('/etc/suricata/suricata.yaml')
+SURICATA_NFQUEUE=Path('/etc/systemd/system/suricata.service.d/nfqueue.conf')
+SURICATA_NFQUEUE_TEXT='[Service]\nType=simple\nPIDFile=\nExecStart=\nExecStart=/usr/bin/suricata -q 0 -q 1 -c /etc/suricata/suricata.yaml\nRestart=on-failure\nRestartSec=3\n'
 
 def run(args, check=True, timeout=40, **kw):
     p=subprocess.run(args,capture_output=True,text=True,timeout=timeout,**kw)
@@ -87,6 +91,7 @@ def owned_paths(kernel):
     paths += ['/etc/systemd/system/'+n+'.d/90-codex-ndpi-memory-hold.conf' for n in ['ds-guard.service','ds-guard-apply.service']]
     paths += ['/etc/systemd/system/'+n+'.d/98-safe-activation.conf' for n in ['ds-guard.service','ds-guard-apply.service']]
     paths += ['/var/lib/ds-guard-safe/activation-guard.json']
+    paths += [str(SURICATA_HOLD)]
     paths += ['/etc/kernel/'+n+'/zz-ds-guard' for n in ['postinst.d','header_postinst.d','postrm.d']]
     for pattern in ['/usr/lib/*/xtables/libxt_ndpi.so','/lib/modules/'+kernel+'/updates/dkms/xt_ndpi.ko*']:
         paths.extend(glob.glob(pattern))
@@ -108,7 +113,7 @@ def begin(txn):
       'tcp_listeners':run(['ss','-Hlnpt']),
       'kernel_log':run(['dmesg']), 'loaded':Path('/sys/module/xt_ndpi').exists(),
       'module_before':run(['modinfo','-n','xt_ndpi'],False),
-      'started':time.time(),'phase':'prepared'}
+      'started':time.time(),'phase':'prepared','suricata_initial_package_status':suricata_package_status()}
     pending=Path('/var/lib/ds-guard-safe/lifecycle/pending.json')
     if pending.is_symlink():raise RuntimeError('Журнал операции является ссылкой')
     operation_id=json.loads(pending.read_text()).get('operation_id') if pending.exists() else None
@@ -131,10 +136,151 @@ def capture_package_default(txn):
         shutil.copy2(p,dest);b['files'][name]={'symlink':False,'new_package_default':True}
         save(txn/'before.json',b)
 
+def suricata_package_status():
+    p=subprocess.run(['dpkg-query','-W','-f=${db:Status-Status}','suricata'],capture_output=True,text=True,timeout=30)
+    if p.returncode==1 and not p.stdout:return ''
+    if p.returncode:raise RuntimeError('Не удалось определить исходное состояние пакета Suricata')
+    return p.stdout.strip()
+
+def _suri_parents(path):
+    for parent in path.parents:
+        if parent.is_symlink():raise RuntimeError('Каталог запрета Suricata является ссылкой')
+        if parent.exists():
+            st=parent.stat()
+            if not stat.S_ISDIR(st.st_mode) or st.st_uid!=0 or st.st_mode&0o022:
+                raise RuntimeError('Небезопасный каталог запрета Suricata')
+
+def _suri_file(path,mode=None):
+    _suri_parents(path)
+    if path.is_symlink():raise RuntimeError('Файл запрета Suricata является ссылкой')
+    if not path.exists():return None
+    st=path.stat()
+    if not stat.S_ISREG(st.st_mode) or st.st_uid!=0 or st.st_gid!=0 or st.st_nlink!=1 or st.st_mode&0o022 or mode is not None and stat.S_IMODE(st.st_mode)!=mode:
+        raise RuntimeError('Не подтверждены владелец или права файла Suricata')
+    return path.read_bytes()
+
+def _suri_sync_directory(path):
+    fd=os.open(path,os.O_RDONLY|os.O_DIRECTORY)
+    try:os.fsync(fd)
+    finally:os.close(fd)
+
+def _suri_mkdir(path):
+    if path.exists():
+        _suri_parents(path/'entry');return
+    _suri_mkdir(path.parent)
+    path.mkdir(mode=0o755)
+    _suri_sync_directory(path);_suri_sync_directory(path.parent)
+
+def _suri_create(path,body,mode):
+    current=_suri_file(path,mode)
+    if current is not None:
+        if current!=body:raise RuntimeError('Чужой файл запрета Suricata не будет заменён')
+        with path.open('rb') as f:os.fsync(f.fileno())
+        _suri_sync_directory(path.parent);return
+    _suri_mkdir(path.parent)
+    _suri_parents(path)
+    temporary=path.with_name('.'+path.name+'.'+str(uuid.uuid4()))
+    try:
+        fd=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,mode)
+        with os.fdopen(fd,'wb') as f:
+            os.fchmod(f.fileno(),mode);f.write(body);f.flush();os.fsync(f.fileno())
+        # A concurrent new destination must never be silently replaced.
+        os.link(temporary,path)
+        temporary.unlink();_suri_sync_directory(path.parent)
+    finally:temporary.unlink(missing_ok=True)
+
+def _suri_context(txn,b):
+    expected={'schema':1,'transaction':str(txn),'dropin':str(SURICATA_HOLD),
+              'initial_package_status':b.get('suricata_initial_package_status'),
+              'initial_unit':b['units'].get('suricata.service')}
+    if expected['initial_package_status'] not in ('','not-installed'):
+        raise RuntimeError('Не подтверждён журнал первичной установки Suricata')
+    if str(SURICATA_HOLD) in b['files'] or str(SURICATA_YAML) in b['files'] and not b['files'][str(SURICATA_YAML)].get('new_package_default'):
+        raise RuntimeError('Прежние файлы Suricata не принадлежат первичной установке')
+    state=expected['initial_unit'] or {}
+    if state.get('active') not in ('inactive','unknown','') or state.get('enabled') not in ('not-found',''):
+        raise RuntimeError('Прежняя служба Suricata не принадлежит первичной установке')
+    allow=txn/'suricata-start-approved'
+    if allow.exists() or allow.is_symlink():raise RuntimeError('Неожиданное разрешение первичного запуска Suricata')
+    return expected,('[Unit]\nConditionPathExists='+str(allow)+'\n').encode()
+
+def _suri_record(txn,b):
+    raw=_suri_file(txn/'suricata-start-guard.json',0o600)
+    if raw is None:return None
+    expected,body=_suri_context(txn,b)
+    if json.loads(raw)!=expected:raise RuntimeError('Не подтверждён журнал первичной установки Suricata')
+    return body
+
+def arm_suricata_guard(txn):
+    b=json.loads((txn/'before.json').read_text())
+    receipt=txn/'suricata-start-guard.json'
+    if not receipt.exists() and not receipt.is_symlink():
+        initial=b.get('suricata_initial_package_status')
+        if initial=='installed':return False
+        if initial not in ('','not-installed'):raise RuntimeError('Исходное отсутствие Suricata не подтверждено')
+        if suricata_package_status() not in ('','not-installed'):
+            raise RuntimeError('Пакет Suricata появился после исходного снимка')
+        if _suri_file(SURICATA_HOLD) is not None:raise RuntimeError('Файл запрета Suricata уже занят')
+        # A refused precondition must not create a receipt that would poison
+        # independent rollback of the rest of this transaction.
+        data,_=_suri_context(txn,b)
+        if run(['systemctl','is-active','suricata.service'],False) not in ('inactive','unknown',''):
+            raise RuntimeError('Новая служба Suricata уже запущена; запрет не применён')
+        _suri_create(receipt,json.dumps(data,sort_keys=True).encode(),0o600)
+    body=_suri_record(txn,b)
+    if run(['systemctl','is-active','suricata.service'],False) not in ('inactive','unknown',''):
+        raise RuntimeError('Новая служба Suricata уже запущена; запрет не применён')
+    _suri_create(SURICATA_HOLD,body,0o644)
+    run(['systemctl','daemon-reload'])
+    return True
+
+def _suri_unlink(txn,b):
+    body=_suri_record(txn,b)
+    actual=_suri_file(SURICATA_HOLD,0o644)
+    if actual is not None:
+        if actual!=body:raise RuntimeError('Запрет Suricata изменён вне установки')
+        SURICATA_HOLD.unlink();_suri_sync_directory(SURICATA_HOLD.parent)
+    run(['systemctl','daemon-reload'])
+
+def release_suricata_guard(txn):
+    b=json.loads((txn/'before.json').read_text());body=_suri_record(txn,b)
+    if body is None:return False
+    if _suri_file(SURICATA_HOLD,0o644)!=body:raise RuntimeError('Запрет первичного запуска Suricata утрачен')
+    if not b['files'].get(str(SURICATA_YAML),{}).get('new_package_default'):
+        raise RuntimeError('Не сохранена исходная пакетная конфигурация Suricata')
+    if _suri_file(SURICATA_NFQUEUE,0o644)!=SURICATA_NFQUEUE_TEXT.encode():
+        raise RuntimeError('Не подтверждена подготовка Suricata для NFQUEUE')
+    if _suri_file(SURICATA_YAML) is None:raise RuntimeError('Нет конфигурации Suricata')
+    run(['/usr/bin/suricata','-T','-c',str(SURICATA_YAML)],timeout=90)
+    _suri_unlink(txn,b)
+    return True
+
+def restore_suricata_guard(txn,b):
+    body=_suri_record(txn,b)
+    if body is None:return set()
+    _suri_create(SURICATA_HOLD,body,0o644)
+    run(['systemctl','daemon-reload'])
+    # A failure before dpkg leaves no unit to stop. The readback below remains
+    # mandatory, so an actually running/failed-to-stop unit cannot pass.
+    run(['systemctl','stop','suricata.service'],False)
+    if run(['systemctl','is-active','suricata.service'],False) not in ('inactive','unknown',''):
+        raise RuntimeError('Первичная служба Suricata не остановлена')
+    if str(SURICATA_YAML) not in b['files'] and (SURICATA_YAML.exists() or SURICATA_YAML.is_symlink()):
+        raise RuntimeError('Пакетная установка Suricata прервана до сохранения default-конфигурации. Запрет запуска сохранён; требуется проверка пакетного состояния.')
+    return {str(SURICATA_HOLD)}
+
+def cleanup_suricata_guard(txn,b):
+    if _suri_record(txn,b) is None:return
+    if (run(['systemctl','is-active','suricata.service'],False) not in ('inactive','unknown','') or
+            run(['systemctl','is-enabled','suricata.service'],False) not in ('disabled','not-found','')):
+        raise RuntimeError('Suricata ещё может запуститься; запрет сохранён')
+    _suri_unlink(txn,b)
+
 def rollback(txn):
     if (txn/'committed').exists() or (txn/'rolled-back').exists(): return
     b=json.loads((txn/'before.json').read_text())
     quarantined=restore_quarantine_first(txn,b)
+    suricata_held=restore_suricata_guard(txn,b)
     run(['systemctl','stop','ds-guard.timer','ds-guard-apply.service','ds-guard.service'],False)
     # Remove only the exact three installer-owned base-hook forms.
     current=run(['iptables-save'])
@@ -167,6 +313,7 @@ def rollback(txn):
     # Restore scoped configuration/module files; leave newly installed packages.
     old=set(b['files']); now=set(owned_paths(b['kernel']))
     for name in now-old:
+        if name in suricata_held:continue
         p=Path(name)
         if p.is_file() or p.is_symlink(): p.unlink()
     for name in old:
@@ -199,6 +346,7 @@ def rollback(txn):
             raise RuntimeError('Previously active service did not recover: '+unit)
     if b['acct'] in ('0','1') and run(['sysctl','-n','net.netfilter.nf_conntrack_acct'])!=b['acct']:
         raise RuntimeError('Conntrack accounting rollback verification failed')
+    cleanup_suricata_guard(txn,b)
     save(txn/'rolled-back',{'time':time.time(),'module_not_forcibly_unloaded':True,'global_firewall_not_restored':True,'files_restored_verified':True,'foreign_firewall_preserved':True,'previously_active_services_restored':True})
 
 def restore_quarantine_first(txn,b,root=Path('/')):
@@ -226,10 +374,12 @@ def restore_quarantine_first(txn,b,root=Path('/')):
     return restored
 
 if __name__=='__main__':
-    if len(sys.argv)!=3 or sys.argv[1] not in ('rollback','capture-package-default'):sys.exit(64)
+    if len(sys.argv)!=3 or sys.argv[1] not in ('rollback','capture-package-default','suricata-arm','suricata-release'):sys.exit(64)
     txn=valid_txn(sys.argv[2])
     if sys.argv[1]=='rollback':
         with (BASE.parent/'install.lock').open('w') as lock:
             fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
             rollback(txn)
-    else:capture_package_default(txn)
+    elif sys.argv[1]=='capture-package-default':capture_package_default(txn)
+    elif sys.argv[1]=='suricata-arm':arm_suricata_guard(txn)
+    else:release_suricata_guard(txn)

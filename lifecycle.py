@@ -28,6 +28,7 @@ EXACT += ['/var/lib/ds-guard-safe/'+n for n in ['installed.json','pending.json',
 EXACT += ['/etc/systemd/system/'+n+'.service.d/90-codex-ndpi-memory-hold.conf' for n in ['ds-guard','ds-guard-apply']]
 EXACT += ['/etc/systemd/system/'+n+'.service.d/98-safe-activation.conf' for n in ['ds-guard','ds-guard-apply']]
 EXACT += ['/var/lib/ds-guard-safe/activation-guard.json']
+EXACT += ['/etc/systemd/system/suricata.service.d/97-safe-initial-install.conf']
 HOLD=Path('/etc/systemd/system/ds-guard.service.d/95-safe-disabled.conf')
 APPLY_HOLD=Path('/etc/systemd/system/ds-guard-apply.service.d/95-safe-disabled.conf')
 LOAD=Path('/etc/modules-load.d/xt_ndpi.conf')
@@ -264,8 +265,16 @@ def verify_no_conflict(b,a,actual,legacy_cold_boot=False):
  for k,v in a['values'].items():
   if b['values'].get(k)!=v and actual['values'].get(k) not in (v,b['values'].get(k)):
    raise RuntimeError('Параметр изменён после установки: '+k)
- for pkg,version in b['packages'].items():
-  if a['packages'].get(pkg)!=version:raise RuntimeError('Установка изменила ранее существовавший пакет; требуется отдельный возврат: '+pkg)
+ # Global inventories are observations, not installer provenance. Independent
+ # administration may upgrade, add or remove unowned packages between runs.
+ # Keep the immutable original inventory; validate only receipt-proven owners.
+ owned=recorded_package_ownership(a)
+ if set(owned)&set(b['packages']):raise RuntimeError('Журнал ошибочно присваивает исходные пакеты системы')
+ for pkg,version in owned.items():
+  for state in (a['packages'],actual['packages']):
+   # Absence permits interrupted removal to resume; a different version never
+   # becomes owned merely because a later snapshot observed it.
+   if pkg in state and state[pkg]!=version:raise RuntimeError('После установки изменена доказанная версия собственного пакета: '+pkg)
  current_rules=managed_state(actual['iptables'])
  if not rotation and current_rules not in (managed_state(a['iptables']),managed_state(b['iptables'])):
   # A separately verified cold legacy resume may have lost volatile rules.
