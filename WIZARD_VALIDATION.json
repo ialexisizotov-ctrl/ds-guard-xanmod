@@ -78,8 +78,12 @@
   "production_verified_at_freeze": false,
   "all_servers_accepted": false,
   "scope": "Explicit keep-current-kernel menu/fallback and one exact Ubuntu ABI; no automatic RAID boot attempt.",
-  "wizard_version": "1.0.0-rc6",
-  "wizard_test_count": 190,
+  "wizard_version": "1.0.0-rc7",
+  "wizard_test_count": 192,
   "payload_archive_sha256": "03f36629175224ae31a2595709d47b4ec61f9646f20aaf51909fe7a54d22954d",
-  "payload_manifest_sha256": "b5d0a339624f3b9fd2167b74cc2033d698f00294beaa766ade22cffe2204e7f4"
+  "payload_manifest_sha256": "b5d0a339624f3b9fd2167b74cc2033d698f00294beaa766ade22cffe2204e7f4",
+  "payload_archive_bytes": 71111274,
+  "download_size_regression_tests": true,
+  "production_initial_install_current_kernel_passed": true,
+  "production_public_repeat_pending": true
 }

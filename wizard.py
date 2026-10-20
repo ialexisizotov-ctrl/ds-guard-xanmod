@@ -21,9 +21,10 @@ import time
 sys.dont_write_bytecode = True
 import boot_trial as boot
 
-VERSION = '1.0.0-rc6'
+VERSION = '1.0.0-rc7'
 RELEASE = 'v1.7.11-dsg2-rc6'
 ARCHIVE_SHA = '03f36629175224ae31a2595709d47b4ec61f9646f20aaf51909fe7a54d22954d'
+ARCHIVE_BYTES = 71111274
 MANIFEST_SHA = 'b5d0a339624f3b9fd2167b74cc2033d698f00294beaa766ade22cffe2204e7f4'
 PAYLOAD_FILES = 87
 ARCHIVE_MEMBERS = 88
@@ -188,10 +189,12 @@ def bundle():
         archive = Path(temp) / "release.tar.gz"
         result = run(["curl", "--proto", "=https", "--proto-redir", "=https",
                       "--tlsv1.2", "-fsSL", "--connect-timeout", "15",
-                      "--max-time", "600", "--max-filesize", "65000000",
+                      "--max-time", "600", "--max-filesize", str(ARCHIVE_BYTES),
                       "--retry", "2", URL, "-o", str(archive)])
         require(result.returncode == 0 and archive.is_file(),
                 "Комплект не скачан. Установка не начата.")
+        require(archive.stat().st_size == ARCHIVE_BYTES,
+                "Размер архива не совпал с закреплённым выпуском. Установка не начата.")
         require(sha(archive) == ARCHIVE_SHA, "Контрольная сумма архива не совпала.")
         extracted = extract_bundle(archive, temp)
         extracted.rename(directory)

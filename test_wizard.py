@@ -302,8 +302,36 @@ class BundleTests(LocalCase):
         self.assertFalse((w.CACHE / w.RELEASE).exists())
 
     def test_bad_download_hash_never_extracts(self):
+        self.patch(w, "ARCHIVE_BYTES", new=len(b"wrong archive"))
         def download(command, **kwargs):
             Path(command[-1]).write_bytes(b"wrong archive")
+            return types.SimpleNamespace(returncode=0)
+        self.patch(w, "run", side_effect=download)
+        extract = self.patch(w, "extract_bundle")
+        with self.assertRaises(w.Refusal):
+            w.bundle()
+        extract.assert_not_called()
+        self.assertFalse((w.CACHE / w.RELEASE).exists())
+
+    def test_download_limit_matches_pinned_archive_and_valid_bundle_loads(self):
+        archive = self.archive_fixture()
+        payload = archive.read_bytes()
+        self.patch(w, "ARCHIVE_BYTES", new=len(payload))
+        self.patch(w, "ARCHIVE_SHA", new=hashlib.sha256(payload).hexdigest())
+        def download(command, **kwargs):
+            self.assertEqual(command[command.index("--max-filesize") + 1],
+                             str(len(payload)))
+            Path(command[-1]).write_bytes(payload)
+            return types.SimpleNamespace(returncode=0)
+        self.patch(w, "run", side_effect=download)
+        self.assertEqual(w.bundle(), w.CACHE / w.RELEASE)
+
+    def test_wrong_download_size_never_extracts_even_with_matching_hash(self):
+        payload = b"truncated archive"
+        self.patch(w, "ARCHIVE_BYTES", new=len(payload) + 1)
+        self.patch(w, "ARCHIVE_SHA", new=hashlib.sha256(payload).hexdigest())
+        def download(command, **kwargs):
+            Path(command[-1]).write_bytes(payload)
             return types.SimpleNamespace(returncode=0)
         self.patch(w, "run", side_effect=download)
         extract = self.patch(w, "extract_bundle")
