@@ -625,23 +625,53 @@ def complete(confirmed=True):
         return save(d)
 
 
+def confirmation_metadata(env):
+    """GRUB's set-default unsets both one-shot keys, including empty values."""
+    if any(env.get(key) not in (None, '') for key in ('next_entry', 'prev_saved_entry')):
+        raise Refusal('Есть незавершённый одноразовый или отложенный выбор GRUB.')
+    return {key: value for key, value in env.items()
+            if key not in ('saved_entry', 'next_entry', 'prev_saved_entry')}
+
+
 def confirm(confirmed=False):
     """Explicit operator acceptance only. Never called by the boot services."""
     if confirmed is not True:
         raise Refusal('Закрепление нового ядра требует явного выбора.')
     with locked():
         d = read_state()
-        if not d or d['status'] not in ('boot-healthy', 'completed') or boot_id() == d['origin_boot_id'] or kernel() != d['target']:
+        if not d or d['status'] not in ('boot-healthy', 'completed', 'confirming') or boot_id() == d['origin_boot_id'] or kernel() != d['target']:
             raise Refusal('Загрузка нового ядра ещё не подтверждена.')
-        env = boot_ownership(d)
-        if env.get('next_entry'):
-            raise Refusal('Есть незавершённый одноразовый выбор GRUB.')
+        if d.get('checked_boot_id') and d['checked_boot_id'] != boot_id():
+            raise Refusal('После проверки ядра произошла другая загрузка. Сначала повторите проверку сервера.')
+        resuming = d['status'] == 'confirming'
+        if d['status'] != 'completed':
+            verify_owned(d)
+        failures = health_failures(d['baseline'])
+        if failures:
+            raise Refusal('Текущие проверки SSH и сети не пройдены: '+'; '.join(failures))
+        env = boot_ownership(d, allow_target_saved=resuming)
+        before_metadata = confirmation_metadata(env)
+        recorded = d.get('confirmation_environment_before')
+        if recorded is not None:
+            if (not isinstance(recorded, dict)
+                    or recorded.get('saved_entry') not in (d['saved_entry'], d['target_entry'])
+                    or confirmation_metadata(recorded) != before_metadata):
+                raise Refusal('Метаданные GRUB изменились после начала закрепления ядра.')
+        else:
+            # Also permits a strictly owned confirming operation left by v1:
+            # its set-default could succeed and only empty-key removal fail
+            # the old literal comparison. Unrelated current keys are preserved.
+            d['confirmation_environment_before'] = dict(env)
         d['status'] = 'confirming'
         save(d)
-        run(['grub-set-default', d['target_entry']])
+        if env.get('saved_entry') != d['target_entry'] or any(
+                key in env for key in ('next_entry', 'prev_saved_entry')):
+            run(['grub-set-default', d['target_entry']])
         after = environment()
-        if after.get('saved_entry') != d['target_entry'] or {k: v for k, v in after.items() if k != 'saved_entry'} != {k: v for k, v in env.items() if k != 'saved_entry'}:
+        if (after.get('saved_entry') != d['target_entry']
+                or confirmation_metadata(after) != before_metadata):
             raise Refusal('Изменение постоянного выбора GRUB не подтверждено.')
+        d['confirmation_environment_after'] = dict(after)
         cleanup(d, retain_finalizer=False)
         d['status'] = 'confirmed'
         return save(d)

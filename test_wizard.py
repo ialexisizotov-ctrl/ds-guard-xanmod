@@ -20,6 +20,8 @@ from unittest import mock
 
 import wizard as w
 
+REAL_ASK = w.ask
+
 
 class LocalCase(unittest.TestCase):
     def setUp(self):
@@ -567,7 +569,7 @@ class FlowTests(LocalCase):
         command.assert_not_called()
 
     def test_ambiguous_trial_cannot_resume(self):
-        for status in ("drift-refused", "confirming", "restoring-default", "arming"):
+        for status in ("drift-refused", "restoring-default", "arming"):
             with self.subTest(status=status):
                 phase = {"recovery-requested": "recovery_requested",
                          "fallback-observed": "recovered"}.get(status, status)
@@ -780,6 +782,120 @@ class ReadOnlyMenuTests(LocalCase):
         setup.assert_called_once_with(self.root / "bundle", ["--mode", "status"])
         self.assertNotIn("[ОТДЕЛЬНАЯ ПЕРЕЗАГРУЗКА]", output.getvalue())
         for operation in (prepare, arm, cancel, handle, snapshot, provenance):
+            operation.assert_not_called()
+
+
+class ConfirmingMenuTests(LocalCase):
+    def fixture(self, choice="0"):
+        trial = self.trial("confirming", baseline={"fixture": "baseline"},
+                           saved_entry="old-entry", target_entry="new-entry")
+        inspect = self.patch(w.boot, "inspect", return_value=trial)
+        health = self.patch(w.boot, "health_failures", return_value=[])
+        ask = self.patch(w, "ask", return_value=choice)
+        confirm = self.patch(w.boot, "confirm", return_value={"status": "confirmed"})
+        mutations = [self.patch(w, "setup"), self.patch(w, "run"),
+                     self.patch(w.boot, "arm"), self.patch(w.boot, "prepare"),
+                     self.patch(w.boot, "complete"), self.patch(w.boot, "cancel")]
+        return trial, inspect, health, ask, confirm, mutations
+
+    def test_exit_is_safe_default_without_setup_or_boot_mutations(self):
+        trial, inspect, health, ask, confirm, mutations = self.fixture()
+        self.assertEqual(w.handle_trial(self.root), 0)
+        self.assertEqual(ask.call_args.args[2], "0")
+        self.assertEqual(ask.call_args.kwargs["noninteractive"], "0")
+        health.assert_called_once_with(trial["baseline"])
+        confirm.assert_not_called()
+        for operation in mutations:
+            operation.assert_not_called()
+
+    def test_explicit_continue_refreshes_identity_health_then_confirms_only(self):
+        trial, inspect, health, ask, confirm, mutations = self.fixture("1")
+        self.assertEqual(w.handle_trial(self.root), 0)
+        self.assertEqual(inspect.call_count, 3)
+        self.assertEqual(health.call_args_list,
+                         [mock.call(trial["baseline"]), mock.call(trial["baseline"])])
+        confirm.assert_called_once_with(confirmed=True)
+        for operation in mutations:
+            operation.assert_not_called()
+
+    def test_failed_health_before_prompt_never_offers_or_confirms(self):
+        trial, inspect, health, ask, confirm, mutations = self.fixture("1")
+        health.return_value = ["SSH недоступен"]
+        with self.assertRaises(w.Refusal):
+            w.handle_trial(self.root)
+        ask.assert_not_called()
+        confirm.assert_not_called()
+        for operation in mutations:
+            operation.assert_not_called()
+
+    def test_wrong_kernel_or_origin_boot_refuses_before_prompt(self):
+        for change in ({"running_kernel": "old-kernel"},
+                       {"current_boot_id": "old-boot"}):
+            with self.subTest(change=change):
+                trial = self.trial("confirming", baseline={}, **change)
+                with mock.patch.object(w.boot, "inspect", return_value=trial), \
+                        mock.patch.object(w, "ask") as ask, \
+                        mock.patch.object(w.boot, "confirm") as confirm:
+                    with self.assertRaises(w.Refusal):
+                        w.handle_trial(self.root)
+                    ask.assert_not_called()
+                    confirm.assert_not_called()
+
+    def test_health_failure_after_choice_refuses_confirmation(self):
+        trial, inspect, health, ask, confirm, mutations = self.fixture("1")
+        health.side_effect = [[], ["маршрут изменился"]]
+        with self.assertRaises(w.Refusal):
+            w.handle_trial(self.root)
+        confirm.assert_not_called()
+        for operation in mutations:
+            operation.assert_not_called()
+
+    def test_identity_drift_before_prompt_or_after_choice_refuses(self):
+        for point in ("before", "after"):
+            for field in ("target", "fallback", "origin_boot_id", "current_boot_id",
+                          "saved_entry", "target_entry", "baseline", "status"):
+                with self.subTest(point=point, field=field):
+                    trial = self.trial("confirming", baseline={"fixture": "baseline"},
+                                       saved_entry="old-entry", target_entry="new-entry")
+                    drifted = {**trial, field: "changed"}
+                    states = [trial, drifted] if point == "before" else [trial, trial, drifted]
+                    with mock.patch.object(w.boot, "inspect", side_effect=states), \
+                            mock.patch.object(w.boot, "health_failures", return_value=[]), \
+                            mock.patch.object(w, "ask", return_value="1") as ask, \
+                            mock.patch.object(w.boot, "confirm") as confirm:
+                        with self.assertRaises(w.Refusal):
+                            w.handle_trial(self.root)
+                        confirm.assert_not_called()
+                        if point == "before":
+                            ask.assert_not_called()
+
+    def test_missing_terminal_exits_without_confirmation(self):
+        trial, inspect, health, ask, confirm, mutations = self.fixture()
+        # Restore the real ask after fixture mocking; only /dev/tty open fails.
+        with mock.patch.object(w, "ask", new=REAL_ASK), \
+                mock.patch("builtins.open", side_effect=OSError("no tty")):
+            self.assertEqual(w.handle_trial(self.root), 0)
+        confirm.assert_not_called()
+        for operation in mutations:
+            operation.assert_not_called()
+
+    def test_requested_mode_does_not_run_after_confirmation(self):
+        trial, inspect, health, ask, confirm, mutations = self.fixture("1")
+        self.patch(w, "bundle", return_value=self.root / "bundle")
+        self.assertEqual(w.main(["--mode", "full"]), 0)
+        confirm.assert_called_once_with(confirmed=True)
+        for operation in mutations:
+            operation.assert_not_called()
+
+    def test_refused_or_unconfirmed_helper_result_does_not_claim_success(self):
+        trial, inspect, health, ask, confirm, mutations = self.fixture("1")
+        for outcome in ({"status": "confirming"}, w.boot.Refusal("drift")):
+            with self.subTest(outcome=type(outcome).__name__):
+                confirm.side_effect = outcome if isinstance(outcome, Exception) else None
+                confirm.return_value = outcome
+                with self.assertRaises((w.Refusal, w.boot.Refusal)):
+                    w.handle_trial(self.root)
+        for operation in mutations:
             operation.assert_not_called()
 
 

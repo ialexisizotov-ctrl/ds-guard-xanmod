@@ -21,8 +21,8 @@ ds_guard_interactive_main() (
     curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
         --connect-timeout 15 --max-time 120 "$base/boot_trial.py" -o "$work/boot_trial.py"
     printf '%s  %s\n' \
-        d3b99a2c562ba251fa1484ecfb77e01d495fafa33dc1675f98f5afe4e5d1f6fe "$work/wizard.py" \
-        ed0e3c682ed01ed325bba442bef462ba1ac841a6b0a129373f5c5f5645456ab9 "$work/boot_trial.py" |
+        f60835ab42d1df2c6e763772dd3329e7a887f43caebe0d981ff6f63937a201f5 "$work/wizard.py" \
+        f2fba5ff7e9edbbefa7e0dfd366b7f622402df24643f8d921541bb79cc64bdee "$work/boot_trial.py" |
         sha256sum --check --strict --status || {
             echo '[ОСТАНОВЛЕНО] Файлы мастера не совпали с контрольными суммами. Повторите позже; установка не начата.' >&2
             exit 78

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Interactive, separately journalled boot workflow around the immutable rc3."""
+"""Interactive, separately journalled boot workflow around the immutable rc4."""
 from __future__ import annotations
 
 import argparse
@@ -21,7 +21,7 @@ import time
 sys.dont_write_bytecode = True
 import boot_trial as boot
 
-VERSION = '1.0.0-rc2'
+VERSION = '1.0.0-rc3'
 RELEASE = 'v1.7.11-dsg2-rc4'
 ARCHIVE_SHA = 'b77dd6b4f11ac863f5c3fbc2a30c54b19ddb61a80eb646a96779ec49abfb552e'
 MANIFEST_SHA = '7389c5adf29a37360735e0351c22572fbf448d3a7ea918c6d6c1bfb5a71ff48c'
@@ -461,6 +461,44 @@ def recovery_menu(trial, requested_mode=None):
         return None
 
 
+def confirming_menu(trial):
+    """Finish only an explicitly accepted interrupted confirmation; never setup."""
+    identity = ("target", "fallback", "origin_boot_id", "current_boot_id",
+                "saved_entry", "target_entry", "baseline")
+
+    def checked_current():
+        current = boot.inspect()
+        require(current.get("status") == "confirming"
+                and all(current.get(key) == trial.get(key) for key in identity),
+                "Состояние закрепления изменилось; действие остановлено.")
+        require(current.get("current_boot_id")
+                and current["current_boot_id"] != current.get("origin_boot_id")
+                and current.get("running_kernel") == current.get("target")
+                and isinstance(current.get("baseline"), dict),
+                "Продолжение закрепления требует того же проверяемого нового ядра.")
+        failures = boot.health_failures(current["baseline"])
+        if failures:
+            print("[ПРОВЕРКА] " + "; ".join(failures))
+        require(not failures, "Текущие SSH и сеть не прошли проверку; закрепление остановлено.")
+        return current
+
+    current = checked_current()
+    display_status(current)
+    print("[ПРОВЕРКА] Текущие SSH и сеть доступны. Постоянный выбор GRUB мог уже "
+          "измениться; помощник проверит сохранённый журнал перед завершением.")
+    choice = ask("1. Завершить закрепление проверенного ядра\n"
+                 "0. Выйти без изменений\nВыберите [0]: ",
+                 {"0", "1"}, "0", noninteractive="0")
+    if choice == "0":
+        return 0
+    checked_current()
+    result = boot.confirm(confirmed=True)
+    require(result.get("status") == "confirmed",
+            "Помощник не подтвердил завершение закрепления.")
+    print("[ГОТОВО] Закрепление завершено. Новое ядро основное; прежнее сохранено.")
+    return 0
+
+
 def handle_trial(directory, requested_mode=None):
     trial = boot.inspect()
     if not trial or trial.get("status") == "none":
@@ -480,7 +518,9 @@ def handle_trial(directory, requested_mode=None):
         return None
     if phase in ("recovery-requested", "fallback-observed", "reboot-failed"):
         return recovery_menu(trial, requested_mode)
-    if phase in ("drift-refused", "confirming", "restoring-default", "arming"):
+    if phase == "confirming":
+        return confirming_menu(trial)
+    if phase in ("drift-refused", "restoring-default", "arming"):
         display_status(trial)
         raise Refusal("Состояние пробной загрузки неоднозначно. Установка, "
                       "автоматический повтор и закрытие из меню остановлены; "

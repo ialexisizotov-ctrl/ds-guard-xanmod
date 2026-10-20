@@ -309,6 +309,127 @@ class StateTests(unittest.TestCase):
         self.assertEqual(self.env['saved_entry'], ENTRY_OLD)
         self.assertEqual(self.d['status'], 'default-restored')
 
+    def test_confirm_accepts_only_removal_of_empty_transient_keys(self):
+        self.d['status'] = 'boot-healthy'
+        self.env.update(next_entry='', prev_saved_entry='', boot_success='1', recordfail='0')
+        original = self.fake_run
+
+        def realistic_grub(argv, **kw):
+            result = original(argv, **kw)
+            if argv[0] == 'grub-set-default':
+                self.env.pop('next_entry', None)
+                self.env.pop('prev_saved_entry', None)
+            return result
+
+        bt.run.side_effect = realistic_grub
+        bt.confirm(confirmed=True)
+        self.assertEqual(self.d['status'], 'confirmed')
+        self.assertEqual(self.env, {'saved_entry': ENTRY_NEW, 'boot_success': '1', 'recordfail': '0'})
+        self.assertEqual(self.d['confirmation_environment_before']['next_entry'], '')
+        self.assertNotIn('next_entry', self.d['confirmation_environment_after'])
+
+    def test_confirm_refuses_nonempty_transient_before_write(self):
+        for transient in ('next_entry', 'prev_saved_entry'):
+            with self.subTest(transient=transient):
+                self.d['status'] = 'boot-healthy'
+                self.env = {'saved_entry': ENTRY_OLD, transient: 'foreign'}
+                self.calls = []
+                with self.assertRaises(bt.Refusal):
+                    bt.confirm(confirmed=True)
+                self.assertEqual(self.calls, [])
+
+    def test_confirm_refuses_unrelated_metadata_change(self):
+        self.d['status'] = 'boot-healthy'
+        self.env['boot_success'] = '1'
+        original = self.fake_run
+
+        def changed_grub(argv, **kw):
+            result = original(argv, **kw)
+            if argv[0] == 'grub-set-default':
+                self.env['boot_success'] = '0'
+            return result
+
+        bt.run.side_effect = changed_grub
+        with self.assertRaisesRegex(bt.Refusal, 'не подтверждено'):
+            bt.confirm(confirmed=True)
+        self.assertEqual(self.d['status'], 'confirming')
+        bt.cleanup.assert_not_called()
+
+    def test_confirm_refuses_added_nonempty_next_after_command(self):
+        self.d['status'] = 'boot-healthy'
+        original = self.fake_run
+
+        def changed_grub(argv, **kw):
+            result = original(argv, **kw)
+            if argv[0] == 'grub-set-default':
+                self.env['next_entry'] = 'foreign'
+            return result
+
+        bt.run.side_effect = changed_grub
+        with self.assertRaises(bt.Refusal):
+            bt.confirm(confirmed=True)
+        self.assertEqual(self.d['status'], 'confirming')
+        bt.cleanup.assert_not_called()
+
+    def test_confirm_resume_owned_target_without_second_grub_write(self):
+        self.d['status'] = 'confirming'
+        self.env['saved_entry'] = ENTRY_NEW
+        bt.confirm(confirmed=True)
+        self.assertEqual(self.d['status'], 'confirmed')
+        bt.verify_owned.assert_called_once()
+        bt.health_failures.assert_called_once()
+        self.assertNotIn(('run', ['grub-set-default', ENTRY_NEW]), self.calls)
+        bt.cleanup.assert_called_once_with(unittest.mock.ANY, retain_finalizer=False)
+
+    def test_confirm_resume_old_default_finishes_owned_write(self):
+        self.d['status'] = 'confirming'
+        bt.confirm(confirmed=True)
+        self.assertEqual(self.d['status'], 'confirmed')
+        self.assertIn(('run', ['grub-set-default', ENTRY_NEW]), self.calls)
+
+    def test_confirm_resume_recorded_empty_removal_accepted(self):
+        self.d.update(status='confirming', confirmation_environment_before={
+            'saved_entry': ENTRY_OLD, 'next_entry': '', 'boot_success': '1'})
+        self.env = {'saved_entry': ENTRY_NEW, 'boot_success': '1'}
+        bt.confirm(confirmed=True)
+        self.assertEqual(self.d['status'], 'confirmed')
+
+    def test_confirm_resume_recorded_metadata_drift_refuses(self):
+        self.d.update(status='confirming', confirmation_environment_before={
+            'saved_entry': ENTRY_OLD, 'next_entry': '', 'boot_success': '1'})
+        self.env = {'saved_entry': ENTRY_NEW, 'boot_success': '0'}
+        with self.assertRaisesRegex(bt.Refusal, 'Метаданные GRUB'):
+            bt.confirm(confirmed=True)
+        self.assertEqual(self.calls, [])
+
+    def test_confirm_resume_foreign_default_refuses(self):
+        self.d['status'] = 'confirming'
+        self.env['saved_entry'] = 'foreign'
+        with self.assertRaises(bt.Refusal):
+            bt.confirm(confirmed=True)
+        self.assertEqual(self.calls, [])
+
+    def test_confirm_requires_unchanged_verified_boot(self):
+        self.d.update(status='confirming', checked_boot_id='another')
+        self.env['saved_entry'] = ENTRY_NEW
+        with self.assertRaisesRegex(bt.Refusal, 'другая загрузка'):
+            bt.confirm(confirmed=True)
+        self.assertEqual(self.calls, [])
+
+    def test_confirm_resume_owned_file_drift_refuses_before_write(self):
+        self.d['status'] = 'confirming'
+        bt.verify_owned.side_effect = bt.Refusal('owned file changed')
+        with self.assertRaises(bt.Refusal):
+            bt.confirm(confirmed=True)
+        self.assertEqual(self.calls, [])
+
+    def test_confirm_resume_current_ssh_failure_refuses_before_write(self):
+        self.d['status'] = 'confirming'
+        bt.health_failures.return_value = ['служба SSH не работает']
+        with self.assertRaisesRegex(bt.Refusal, 'проверки SSH'):
+            bt.confirm(confirmed=True)
+        self.assertEqual(self.calls, [])
+
     def test_undo_foreign_default_refuses(self):
         self.d['status'] = 'confirmed'
         self.env['saved_entry'] = 'admin'
