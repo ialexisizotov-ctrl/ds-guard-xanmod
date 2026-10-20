@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "release": "v1.7.11-dsg2-rc7",
-  "wizard_version": "1.0.0-rc8",
+  "release": "v1.7.11-dsg2-rc8",
+  "wizard_version": "1.0.0-rc9",
   "status": "LOCAL_VALIDATION_PASS",
   "core_tests": {
-    "tests": 266,
+    "tests": 274,
     "failures": 0,
     "errors": 0,
     "skipped": 0
@@ -14,9 +14,9 @@
   "boot_helper_changed": false,
   "production_verified_at_freeze": false,
   "all_servers_accepted": false,
-  "change": "Serialize read-only layer verification with the rule-generation writer using the existing apply.lock.",
+  "change": "Keep rc7 verification locking; admit only exact pristine Suricata package defaults proven by an owned completed rollback.",
   "wizard_test_count": 192,
-  "payload_archive_sha256": "09a27b1bdd1007aa85862e858574d8d2557b3fef86f08a5b8a3b48499ce07d72",
-  "payload_manifest_sha256": "304222a1c3ceb7b6ee254959f27c30850c0c19f4071ee081ef3fa37582457536",
-  "archive_bytes": 71112511
+  "payload_archive_sha256": "ea218418327f0f15fcc53a2d406bece30da500049566a3ff89c789422f87b5a1",
+  "payload_manifest_sha256": "5d3e82823c656922f56f618f294f928a7b7447babd5383b54c031c79f256d85b",
+  "archive_bytes": 71115980
 }

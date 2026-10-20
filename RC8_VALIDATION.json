@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "release": "v1.7.11-dsg2-rc8",
+  "wizard_version": "1.0.0-rc9",
+  "status": "LOCAL_VALIDATION_PASS",
+  "core_tests": {
+    "tests": 274,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "kernel_assets_changed": false,
+  "kernel_catalog_changed": false,
+  "boot_helper_changed": false,
+  "production_verified_at_freeze": false,
+  "all_servers_accepted": false,
+  "change": "Keep rc7 verification locking; admit only exact pristine Suricata package defaults proven by an owned completed rollback."
+}
