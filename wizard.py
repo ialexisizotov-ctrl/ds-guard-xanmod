@@ -21,13 +21,13 @@ import time
 sys.dont_write_bytecode = True
 import boot_trial as boot
 
-VERSION = '1.0.0-rc7'
-RELEASE = 'v1.7.11-dsg2-rc6'
-ARCHIVE_SHA = '03f36629175224ae31a2595709d47b4ec61f9646f20aaf51909fe7a54d22954d'
-ARCHIVE_BYTES = 71111274
-MANIFEST_SHA = 'b5d0a339624f3b9fd2167b74cc2033d698f00294beaa766ade22cffe2204e7f4'
-PAYLOAD_FILES = 87
-ARCHIVE_MEMBERS = 88
+VERSION = '1.0.0-rc8'
+RELEASE = 'v1.7.11-dsg2-rc7'
+ARCHIVE_SHA = '09a27b1bdd1007aa85862e858574d8d2557b3fef86f08a5b8a3b48499ce07d72'
+ARCHIVE_BYTES = 71112511
+MANIFEST_SHA = '304222a1c3ceb7b6ee254959f27c30850c0c19f4071ee081ef3fa37582457536'
+PAYLOAD_FILES = 90
+ARCHIVE_MEMBERS = 91
 URL = ("https://github.com/ialexisizotov-ctrl/ds-guard-xanmod/releases/download/"
        + RELEASE + "/ds-guard-safe-" + RELEASE + ".tar.gz")
 CACHE = Path("/var/cache/ds-guard-wizard")
