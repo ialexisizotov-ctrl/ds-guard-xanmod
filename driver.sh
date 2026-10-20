@@ -25,10 +25,13 @@ case "$1" in
     setup_domains || exit 1
     setup_conntrack_accounting || exit 1
     install_enforcer || exit 1
-    verify
-    [ "$VERIFY_T" -gt 0 ] && [ "$VERIFY_T" = "$VERIFY_S" ] || exit 1
+    python3 "$DS_SAFE_ROOT/verify_guard.py" "$DS_TXN" || exit $?
     ;;
   verify)
+    python3 "$DS_SAFE_ROOT/verify_guard.py" "$DS_TXN" || exit $?
+    ;;
+  verify-locked)
+    # Read-only phase called by verify_guard.py while holding apply.lock.
     verify
     [ "$VERIFY_T" -gt 0 ] && [ "$VERIFY_T" = "$VERIFY_S" ] || exit 1
     ;;

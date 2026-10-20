@@ -52,8 +52,12 @@ def collect(stage_only=False):
         if not shutil.which(tool): errors.append('Не найдена необходимая команда: ' + tool)
     guard2 = [Path('/etc/systemd/system/ssh.service.d/zz-ds-guard.conf'), Path('/etc/systemd/system/suricata.service.d/zz-ds-guard-nfqueue.conf')]
     if any(p.exists() for p in guard2): errors.append('Обнаружен ds-guard 2.x; этот выпуск не поддерживает его замену')
+    retry_origin = None
     if Path('/etc/suricata/suricata.yaml').exists() and not Path('/etc/suricata/rules/ds-p2p.rules').exists():
-        errors.append('Существующая конфигурация Suricata не принадлежит ds-guard; её замена запрещена')
+        from suricata_retry import proof
+        retry_origin = proof(run)
+        if retry_origin is None:
+            errors.append('Существующая конфигурация Suricata не принадлежит ds-guard; её замена запрещена')
     related=run(['systemctl','show','ds-guard.service','-p','RequiredBy','-p','BoundBy'])[1]
     for line in related.splitlines():
         for unit in line.partition('=')[2].split():
@@ -72,7 +76,8 @@ def collect(stage_only=False):
         errors.append('Маршрут IPv4 по умолчанию должен однозначно определять внешний интерфейс и шлюз')
     return {'kernel': kernel, 'os': os_data.get('ID', '').strip('"'), 'available_bytes': mem['MemAvailable'],
             'errors': errors, 'kernel_diagnostics':diagnostics, 'stage_only':stage_only,
-            'compatible': not errors, 'loaded_module': Path('/sys/module/xt_ndpi').exists(),
+            'compatible': not errors, 'suricata_retry_origin':retry_origin,
+            'loaded_module': Path('/sys/module/xt_ndpi').exists(),
             'headers_present': Path('/lib/modules/' + kernel + '/build/Makefile').exists(),
             'scope': 'IPv4 filtering; no kernel replacement or automatic reboot'}
 
