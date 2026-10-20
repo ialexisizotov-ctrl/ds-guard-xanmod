@@ -1,49 +1,23 @@
 {
   "schema": 1,
-  "component": "ds-guard interactive wizard",
-  "wizard_version": "1.0.0-rc3",
+  "wizard_version": "1.0.0-rc4",
   "release": "v1.7.11-dsg2-rc4",
   "status": "LOCAL_VALIDATION_PASS",
   "wizard_tests": {
-    "tests": 157,
+    "tests": 180,
     "failures": 0,
     "errors": 0,
     "skipped": 0
   },
-  "syntax": {
-    "python_compile": 4,
-    "bash_syntax": 1
-  },
   "payload_archive_sha256": "b77dd6b4f11ac863f5c3fbc2a30c54b19ddb61a80eb646a96779ec49abfb552e",
   "payload_manifest_sha256": "7389c5adf29a37360735e0351c22572fbf448d3a7ea918c6d6c1bfb5a71ff48c",
-  "payload_files": 80,
-  "archive_members": 81,
   "core_payload_changed": false,
-  "historical_core_tests": {
-    "tests": 256,
-    "rerun_for_this_wizard": false
-  },
-  "boot_helper_changed": true,
-  "boot_helper_sha256": "f2fba5ff7e9edbbefa7e0dfd366b7f622402df24643f8d921541bb79cc64bdee",
-  "actual_grub_fixture": {
-    "receipt_sha256": "101acd6327aff303157f32a6de849e2f82be5f56779963a46bd16e966964377d",
-    "grub_version": "grub-set-default (GRUB) 2.12-1ubuntu7.3",
-    "execution_scope": "actual server GRUB binary with an isolated temporary boot directory",
-    "temporary_boot_directory": true,
-    "empty_transient_keys_removed": true,
-    "foreign_metadata_preserved": true,
-    "working_grubenv_unchanged": true,
-    "temporary_directory_removed": true,
-    "machine_reboot_tested": false
-  },
-  "confirming_ui": "explicit continue after fresh identity and health checks; default exit",
   "source_tests_are_mocked": true,
   "whole_machine_reboot_tested": false,
-  "public_subscription_accepted": false,
   "all_servers_accepted": false,
-  "scope_note": "Frozen local wizard evidence; later bounded production outcomes are in the release description.",
+  "scope_note": "Initial numeric-GRUB fallback preparation, repetition, conflicts and rollback; live outcomes are separate.",
   "generated_wizard_tests": {
-    "tests": 157,
+    "tests": 180,
     "failures": 0,
     "errors": 0,
     "skipped": 0

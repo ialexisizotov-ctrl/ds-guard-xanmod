@@ -21,8 +21,8 @@ import time
 sys.dont_write_bytecode = True
 import boot_trial as boot
 
-VERSION = '1.0.0-rc3'
-RELEASE = 'v1.7.11-dsg2-rc4'
+VERSION = "1.0.0-rc4"
+RELEASE = "v1.7.11-dsg2-rc4"
 ARCHIVE_SHA = 'b77dd6b4f11ac863f5c3fbc2a30c54b19ddb61a80eb646a96779ec49abfb552e'
 MANIFEST_SHA = '7389c5adf29a37360735e0351c22572fbf448d3a7ea918c6d6c1bfb5a71ff48c'
 PAYLOAD_FILES = 80
@@ -608,9 +608,11 @@ def main(argv=None):
                   "Работающее ядро установщик не удалит.")
         before_kernel = platform.release()
         stages_before = stage_signatures()
+        prepare_install_fallback(directory, args)
         rc = setup(directory, args)
         if rc == 0 and mode == "remove":
             boot.cleanup_after_remove()
+            boot.restore_fallback()
         if rc != 20:
             return rc
         target = proven_stage(directory, args, before_kernel, stages_before)
@@ -620,6 +622,37 @@ def main(argv=None):
             return 20
         trial = boot.prepare(target, resume_args(args), boot.capture_baseline())
         return offer_reboot(trial)
+
+
+def prepare_install_fallback(directory, args):
+    mode = args[args.index("--mode") + 1]
+    if mode not in ("full", "kernel"):
+        return
+    policy = args[args.index("--kernel-policy") + 1] if "--kernel-policy" in args else "prefer-xanmod"
+    if policy == "keep":
+        return
+    # Reuse the immutable core's exact read-only selection, including legacy
+    # upgrade deferral, rather than maintaining a second kernel-selection policy.
+    code = (
+        "import json,sys;sys.path.insert(0,sys.argv[1]);import setup_ru as s;"
+        "from legacy_context import context;"
+        "i=s.system_info();p=sys.argv[3];"
+        "p='keep' if sys.argv[2]=='full' and context(s.ROOT) else p;"
+        "k,r=s.choose_kernel(json.loads((s.ROOT/'kernels.json').read_text()),"
+        "i['os_id'],i['os_version'],i['flags'],i['kernel'],p,i['loaded_modules']);"
+        "print(json.dumps({'current':i['kernel'],'selected':k}))"
+    )
+    result = run([sys.executable, "-E", "-s", "-B", "-c", code, str(directory), mode, policy],
+                 capture_output=True, text=True, timeout=60)
+    require(result.returncode == 0, "Не удалось проверить выбор ядра до подготовки загрузчика. " +
+            result.stderr[-600:].strip())
+    selected = json.loads(result.stdout)
+    if selected["selected"] == selected["current"]:
+        return
+    print("[ПОДГОТОВКА ВОЗВРАТА] Проверка и закрепление работающего ядра до установки нового.", flush=True)
+    fallback = boot.ensure_fallback()
+    print("[ВОЗВРАТ ПОДГОТОВЛЕН] Резервное ядро: " + fallback["fallback"] +
+          ". Исходные настройки сохранены. Перезагрузка не выполнялась.", flush=True)
 
 
 if __name__ == "__main__":

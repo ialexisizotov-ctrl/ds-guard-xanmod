@@ -21,6 +21,7 @@ from unittest import mock
 import wizard as w
 
 REAL_ASK = w.ask
+REAL_PREPARE_FALLBACK = w.prepare_install_fallback
 
 
 class LocalCase(unittest.TestCase):
@@ -42,6 +43,8 @@ class LocalCase(unittest.TestCase):
         self.stack.enter_context(mock.patch.object(w, "ARCHIVE_MEMBERS", 76))
         self.stack.enter_context(mock.patch.object(w, "ARCHIVE_SHA", "1" * 64))
         self.stack.enter_context(mock.patch.object(w, "MANIFEST_SHA", "2" * 64))
+        self.stack.enter_context(mock.patch.object(w, "prepare_install_fallback"))
+        self.stack.enter_context(mock.patch.object(w.boot, "restore_fallback"))
 
     def patch(self, target, name, **kwargs):
         return self.stack.enter_context(mock.patch.object(target, name, **kwargs))
@@ -1062,6 +1065,42 @@ class RecoveryMenuTests(LocalCase):
         ask.assert_not_called()
         cancel.assert_not_called()
         self.assert_no_install_or_reboot(arm, setup, offer, command)
+
+
+
+class FallbackSelectionTests(LocalCase):
+    def test_readonly_and_non_kernel_modes_do_not_prepare_grub(self):
+        prepare = self.patch(w.boot, "ensure_fallback")
+        for mode in ("check","status","tune","guard","remove","disable","rollback-upgrade"):
+            REAL_PREPARE_FALLBACK(Path("/bundle"), ["--mode",mode])
+        prepare.assert_not_called()
+        self.commands.assert_not_called()
+
+    def test_keep_policy_does_not_touch_grub(self):
+        REAL_PREPARE_FALLBACK(Path("/bundle"), ["--mode","full","--kernel-policy","keep"])
+        self.commands.assert_not_called()
+
+    def test_same_selected_kernel_does_not_touch_grub(self):
+        self.patch(w,"run",return_value=types.SimpleNamespace(returncode=0,stdout='{"current":"same","selected":"same"}',stderr=""))
+        prepare = self.patch(w.boot,"ensure_fallback")
+        REAL_PREPARE_FALLBACK(Path("/bundle"),["--mode","full"])
+        prepare.assert_not_called()
+
+    def test_new_kernel_prepares_fallback(self):
+        command = self.patch(w,"run",return_value=types.SimpleNamespace(returncode=0,stdout='{"current":"old","selected":"new"}',stderr=""))
+        prepare = self.patch(w.boot,"ensure_fallback",return_value={"fallback":"old"})
+        REAL_PREPARE_FALLBACK(Path("/bundle"),["--mode","kernel","--kernel-policy","ubuntu"])
+        prepare.assert_called_once_with()
+        self.assertEqual(command.call_args.args[0][-3:],["/bundle","kernel","ubuntu"])
+        self.assertIn("choose_kernel",command.call_args.args[0][-4])
+        self.assertIn("context(s.ROOT)",command.call_args.args[0][-4])
+
+    def test_selection_failure_never_changes_grub(self):
+        self.patch(w,"run",return_value=types.SimpleNamespace(returncode=78,stdout="",stderr="not compatible"))
+        prepare = self.patch(w.boot,"ensure_fallback")
+        with self.assertRaises(w.Refusal):
+            REAL_PREPARE_FALLBACK(Path("/bundle"),["--mode","full"])
+        prepare.assert_not_called()
 
 
 if __name__ == "__main__":

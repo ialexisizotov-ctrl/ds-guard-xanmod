@@ -4,6 +4,7 @@
 No kernel installer is run by the boot services. No watchdog is enabled.
 """
 import argparse
+import base64
 import fcntl
 import hashlib
 import ipaddress
@@ -30,6 +31,13 @@ FINALIZE_DROPIN = UNIT_DIR/'xanmod-finalize.service.d/99-ds-guard-wizard-trial.c
 TERMINAL = {'cancelled', 'completed', 'fallback-observed', 'default-restored'}
 ACTIVE = {'prepared', 'arming', 'armed', 'boot-healthy', 'recovery-requested',
           'reboot-failed', 'drift-refused', 'confirming', 'restoring-default'}
+FALLBACK = Path('/var/lib/ds-guard-wizard/fallback.json')
+DEFAULTS = Path('/etc/default/grub')
+DEFAULTS_DIR = Path('/etc/default/grub.d')
+FALLBACK_DROPIN = DEFAULTS_DIR/'zzzz-ds-guard-fallback.cfg'
+BOOT_DIR = Path('/boot')
+PACKAGE_LOCK = Path('/var/lib/dpkg/lock-frontend')
+FALLBACK_TEXT = b'# Managed by ds-guard wizard; original choice is journalled.\nGRUB_DEFAULT=saved\n'
 
 
 class Refusal(RuntimeError):
@@ -226,6 +234,196 @@ def environment_backend():
                       +' и слой '+repr(abstraction)+'. Используйте консоль хостера '
                       'для ручного выбора ядра; запись одноразового выбора не выполнена.')
     return {'filesystem': filesystem, 'abstraction': abstraction}
+
+
+def defaults_signature():
+    paths = [DEFAULTS, *sorted(DEFAULTS_DIR.glob('*.cfg'))]
+    return {str(p): digest(checked_file(p)) for p in paths if p != FALLBACK_DROPIN}
+
+
+def save_fallback(d):
+    atomic(FALLBACK, json.dumps(d, ensure_ascii=False, indent=2).encode())
+
+
+def fallback_record():
+    if not FALLBACK.exists():
+        return None
+    d = json.loads(checked_file(FALLBACK))
+    if (d.get('schema') != 1 or d.get('status') not in
+            ('building', 'committing', 'ready', 'restoring', 'restored')
+            or not isinstance(d.get('original_environment'), dict)
+            or not isinstance(d.get('defaults'), dict)
+            or not re.fullmatch(r'gnulinux-advanced-[0-9a-f-]+>gnulinux-[A-Za-z0-9._+~-]+-advanced-[0-9a-f-]+', d.get('entry', ''))):
+        raise Refusal('Повреждён журнал резервного выбора GRUB.')
+    return d
+
+
+@contextmanager
+def fallback_lock():
+    with locked():
+        fd = os.open(str(PACKAGE_LOCK), os.O_RDWR | os.O_NOFOLLOW)
+        try:
+            fcntl.lockf(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            yield
+        finally:
+            os.close(fd)
+
+
+def generate_grub():
+    """Generate separately; never replace the working menu before validation."""
+    candidate = CFG.with_name('ds-guard-grub-candidate-'+str(os.getpid())+'.cfg')
+    if candidate.exists() or candidate.is_symlink():
+        raise Refusal('Временное меню GRUB уже существует.')
+    try:
+        run(['grub-mkconfig', '-o', str(candidate)], timeout=120)
+        data = checked_file(candidate)
+        run(['grub-script-check', str(candidate)])
+        grub_entries(data.decode())
+        return data
+    finally:
+        if candidate.is_file() and not candidate.is_symlink():
+            candidate.unlink()
+        side = candidate.with_name(candidate.name+'.new')
+        if side.is_file() and not side.is_symlink():
+            side.unlink()
+
+
+def restore_saved_entry(d, check_only=False):
+    env = environment()
+    original = d['original_environment']
+    if env.get('next_entry') or env.get('prev_saved_entry'):
+        raise Refusal('Сначала завершите назначенную пробную загрузку.')
+    if env.get('saved_entry') not in (d['entry'], original.get('saved_entry')):
+        raise Refusal('Сохранённый выбор GRUB изменён извне.')
+    if check_only:
+        return
+    expected = dict(env)
+    if 'saved_entry' in original:
+        run(['grub-editenv', str(ENV), 'set', 'saved_entry='+original['saved_entry']])
+        expected['saved_entry'] = original['saved_entry']
+    else:
+        run(['grub-editenv', str(ENV), 'unset', 'saved_entry'])
+        expected.pop('saved_entry', None)
+    if environment() != expected:
+        raise Refusal('Возврат исходного выбора GRUB не подтверждён.')
+
+
+def rollback_fallback(d):
+    """Recover only our interrupted initial preparation, with exact ownership."""
+    if defaults_signature() != d['defaults']:
+        raise Refusal('Настройки GRUB изменены извне; автоматический возврат остановлен.')
+    current = checked_file(CFG)
+    original = base64.b64decode(d['original_config'], validate=True)
+    allowed = {digest(original), d.get('candidate_sha256')}
+    if digest(current) not in allowed:
+        raise Refusal('Меню GRUB изменено извне; автоматический возврат остановлен.')
+    if FALLBACK_DROPIN.exists() or FALLBACK_DROPIN.is_symlink():
+        if checked_file(FALLBACK_DROPIN) != FALLBACK_TEXT:
+            raise Refusal('Собственный файл резервного выбора изменён извне.')
+        FALLBACK_DROPIN.unlink()
+    restore_saved_entry(d)
+    if current != original:
+        atomic(CFG, original, d['original_mode'])
+    d['status'] = 'restored'
+    save_fallback(d)
+
+
+def ensure_fallback():
+    """Pin the running kernel before a first installation can reorder GRUB."""
+    with fallback_lock():
+        previous = fallback_record()
+        if previous and previous['status'] in ('building', 'committing'):
+            rollback_fallback(previous)
+            previous = fallback_record()
+        if previous and previous['status'] == 'restoring':
+            raise Refusal('Возврат настроек GRUB не завершён; повторите удаление.')
+        config = checked_file(CFG)
+        run(['grub-script-check', str(CFG)])
+        environment_backend()
+        env = environment()
+        if env.get('next_entry') or env.get('prev_saved_entry'):
+            raise Refusal('В GRUB уже назначена другая пробная загрузка.')
+        entries = grub_entries(config.decode())
+        matches = [(ident, value) for ident, value in entries.items() if value['kernel'] == kernel()]
+        if len(matches) != 1:
+            raise Refusal('Работающее ядро не найдено однозначно в меню GRUB.')
+        ident, value = matches[0]
+        entry = value['submenu']+'>'+ident
+        for prefix in ('vmlinuz-', 'initrd.img-'):
+            if len(checked_file(BOOT_DIR/(prefix+kernel()))) <= 1024*1024:
+                raise Refusal('Не найден полный образ или initramfs работающего ядра.')
+        if env.get('saved_entry') and env['saved_entry'] != entry:
+            raise Refusal('Ранее выбранное ядро отличается от работающего; чужой выбор сохранён.')
+        if 'set default="${saved_entry}"' in config.decode() and env.get('saved_entry') == entry:
+            if previous and previous['status'] == 'ready' and checked_file(FALLBACK_DROPIN) != FALLBACK_TEXT:
+                raise Refusal('Файл резервного выбора изменён извне.')
+            return {'status': 'already-pinned', 'fallback': kernel(), 'entry': entry}
+        if previous and previous['status'] == 'ready':
+            raise Refusal('Резервный выбор GRUB изменён после подготовки.')
+        # Only the ordinary numeric first-entry default is migrated automatically.
+        if 'set default="0"' not in config.decode() and 'set default="${saved_entry}"' not in config.decode():
+            raise Refusal('Нестандартный выбор GRUB требует отдельной проверки.')
+        if FALLBACK_DROPIN.exists() or FALLBACK_DROPIN.is_symlink():
+            raise Refusal('Файл резервного выбора уже существует без подтверждённого владельца.')
+        d = {'schema': 1, 'status': 'building', 'entry': entry, 'kernel': kernel(),
+             'original_environment': env, 'defaults': defaults_signature(),
+             'original_config': base64.b64encode(config).decode(),
+             'original_mode': CFG.stat().st_mode & 0o777, 'origin_boot_id': boot_id()}
+        save_fallback(d)
+        try:
+            atomic(FALLBACK_DROPIN, FALLBACK_TEXT, 0o644)
+            candidate = generate_grub()
+            if 'set default="${saved_entry}"' not in candidate.decode() or ident not in grub_entries(candidate.decode()):
+                raise Refusal('Новое меню GRUB не подтвердило резервный выбор.')
+            if defaults_signature() != d['defaults'] or checked_file(CFG) != config or environment() != env:
+                raise Refusal('Настройки загрузки изменились во время подготовки.')
+            d['candidate_sha256'] = digest(candidate)
+            d['status'] = 'committing'
+            save_fallback(d)
+            # Set saved_entry first while the live numeric default still ignores it.
+            run(['grub-editenv', str(ENV), 'set', 'saved_entry='+entry])
+            if environment() != {**env, 'saved_entry': entry}:
+                raise Refusal('Запись резервного ядра не подтверждена.')
+            atomic(CFG, candidate, d['original_mode'])
+            run(['grub-script-check', str(CFG)])
+            d['status'] = 'ready'
+            save_fallback(d)
+        except Exception:
+            rollback_fallback(d)
+            raise
+        return {'status': 'prepared', 'fallback': kernel(), 'entry': entry}
+
+
+def restore_fallback():
+    """After successful removal, regenerate using the original source settings."""
+    with fallback_lock():
+        d = fallback_record()
+        if not d or d['status'] == 'restored':
+            return
+        if d['status'] in ('building', 'committing'):
+            rollback_fallback(d)
+            return
+        if defaults_signature() != d['defaults']:
+            raise Refusal('Исходные настройки GRUB изменены извне; возврат требует проверки.')
+        if kernel() != d['kernel']:
+            raise Refusal('Перед возвратом настроек GRUB загрузите сохранённое прежнее ядро.')
+        if FALLBACK_DROPIN.exists() or FALLBACK_DROPIN.is_symlink():
+            if checked_file(FALLBACK_DROPIN) != FALLBACK_TEXT:
+                raise Refusal('Собственный файл GRUB изменён извне.')
+        elif d['status'] != 'restoring':
+            raise Refusal('Собственный файл GRUB отсутствует.')
+        restore_saved_entry(d, check_only=True)
+        before = checked_file(CFG)
+        d['status'] = 'restoring'
+        save_fallback(d)
+        FALLBACK_DROPIN.unlink(missing_ok=True)
+        candidate = generate_grub()
+        if defaults_signature() != d['defaults'] or checked_file(CFG) != before:
+            raise Refusal('Меню GRUB изменилось во время возврата.')
+        atomic(CFG, candidate, d['original_mode'])
+        restore_saved_entry(d)
+        d['status'] = 'restored'
+        save_fallback(d)
 
 
 def boot_plan(target):

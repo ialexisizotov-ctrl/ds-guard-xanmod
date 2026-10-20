@@ -1,11 +1,188 @@
 import copy
+import json
 import tempfile
 import unittest
-from contextlib import nullcontext
+from contextlib import nullcontext, ExitStack
 from pathlib import Path
 from unittest.mock import patch
 
 import boot_trial as bt
+
+
+class InitialFallbackTests(unittest.TestCase):
+    def setUp(self):
+        self.stack = ExitStack()
+        self.addCleanup(self.stack.close)
+        self.root = Path(self.stack.enter_context(tempfile.TemporaryDirectory(dir=Path.home())))
+        for name, path in {
+            'CFG': self.root/'boot/grub/grub.cfg',
+            'ENV': self.root/'boot/grub/grubenv',
+            'FALLBACK': self.root/'state/fallback.json',
+            'DEFAULTS': self.root/'etc/grub',
+            'DEFAULTS_DIR': self.root/'etc/grub.d',
+            'FALLBACK_DROPIN': self.root/'etc/grub.d/zzzz-ds-guard-fallback.cfg',
+            'BOOT_DIR': self.root/'boot',
+        }.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            self.stack.enter_context(patch.object(bt, name, path))
+        bt.DEFAULTS_DIR.mkdir(exist_ok=True)
+        self.original = CONFIG.replace('set default="${saved_entry}"', 'set default="0"').encode()
+        bt.CFG.write_bytes(self.original)
+        bt.ENV.write_bytes(b'fixture')
+        bt.DEFAULTS.write_text('GRUB_DEFAULT=0\n')
+        for prefix in ('vmlinuz-', 'initrd.img-'):
+            (bt.BOOT_DIR/(prefix+OLD)).write_bytes(b'x'*(1024*1024+1))
+        self.env = {'foreign_marker': 'preserve'}
+        self.commands = []
+        self.stack.enter_context(patch.object(bt, 'kernel', return_value=OLD))
+        self.stack.enter_context(patch.object(bt, 'boot_id', return_value='origin'))
+        self.stack.enter_context(patch.object(bt, 'fallback_lock', side_effect=nullcontext))
+        self.stack.enter_context(patch.object(bt, 'environment_backend', return_value={'filesystem':'ext2','abstraction':''}))
+        self.stack.enter_context(patch.object(bt, 'environment', side_effect=lambda: dict(self.env)))
+        self.stack.enter_context(patch.object(bt, 'run', side_effect=self.command))
+
+    def command(self, argv, **kwargs):
+        self.commands.append(argv)
+        if argv[0] == 'grub-mkconfig':
+            data = CONFIG.encode() if bt.FALLBACK_DROPIN.exists() else self.original
+            Path(argv[-1]).write_bytes(data)
+        elif argv[0] == 'grub-editenv':
+            if argv[2] == 'set':
+                k, v = argv[3].split('=',1)
+                self.env[k] = v
+            elif argv[2] == 'unset':
+                self.env.pop(argv[3],None)
+        elif argv[0] != 'grub-script-check':
+            raise AssertionError('Unexpected command: '+str(argv))
+        return ''
+
+    def test_initial_numeric_default_is_pinned_before_packages(self):
+        result = bt.ensure_fallback()
+        self.assertEqual(result['entry'],ENTRY_OLD)
+        self.assertEqual(self.env,{'foreign_marker':'preserve','saved_entry':ENTRY_OLD})
+        self.assertEqual(bt.CFG.read_bytes(),CONFIG.encode())
+        self.assertEqual(bt.DEFAULTS.read_text(),'GRUB_DEFAULT=0\n')
+        self.assertEqual(bt.fallback_record()['status'],'ready')
+        self.assertFalse(any(a[0] in ('dpkg','apt-get','systemctl') for a in self.commands))
+
+    def test_repeat_is_readonly_and_keeps_first_baseline(self):
+        bt.ensure_fallback()
+        original_record = bt.FALLBACK.read_bytes()
+        self.commands.clear()
+        self.assertEqual(bt.ensure_fallback()['status'],'already-pinned')
+        self.assertEqual(bt.FALLBACK.read_bytes(),original_record)
+        self.assertEqual(self.commands,[['grub-script-check',str(bt.CFG)]])
+
+    def test_existing_saved_default_is_not_adopted(self):
+        bt.CFG.write_bytes(CONFIG.encode())
+        self.env['saved_entry'] = ENTRY_OLD
+        self.assertEqual(bt.ensure_fallback()['status'],'already-pinned')
+        self.assertFalse(bt.FALLBACK.exists())
+        self.assertFalse(bt.FALLBACK_DROPIN.exists())
+
+    def test_foreign_saved_entry_is_refused(self):
+        self.env['saved_entry'] = ENTRY_NEW
+        with self.assertRaises(bt.Refusal): bt.ensure_fallback()
+        self.assertEqual(bt.CFG.read_bytes(),self.original)
+        self.assertFalse(bt.FALLBACK.exists())
+
+    def test_pending_boot_entries_are_refused(self):
+        for key in ('next_entry','prev_saved_entry'):
+            with self.subTest(key=key):
+                self.env[key] = ENTRY_NEW
+                with self.assertRaises(bt.Refusal): bt.ensure_fallback()
+                self.env.pop(key)
+        self.assertFalse(bt.FALLBACK.exists())
+
+    def test_unknown_default_is_not_overwritten(self):
+        bt.CFG.write_bytes(self.original.replace(b'set default="0"',b'set default="foreign"'))
+        with self.assertRaises(bt.Refusal): bt.ensure_fallback()
+        self.assertFalse(bt.FALLBACK.exists())
+
+    def test_absent_running_initramfs_is_refused_before_write(self):
+        (bt.BOOT_DIR/('initrd.img-'+OLD)).unlink()
+        with self.assertRaises(bt.Refusal): bt.ensure_fallback()
+        self.assertFalse(bt.FALLBACK.exists())
+
+    def test_foreign_dropin_not_overwritten(self):
+        bt.FALLBACK_DROPIN.write_text('foreign')
+        with self.assertRaises(bt.Refusal): bt.ensure_fallback()
+        self.assertEqual(bt.FALLBACK_DROPIN.read_text(),'foreign')
+
+    def test_failed_generation_restores_original_state(self):
+        with patch.object(bt,'generate_grub',side_effect=bt.Refusal('fixture failure')):
+            with self.assertRaises(bt.Refusal): bt.ensure_fallback()
+        self.assertEqual(bt.CFG.read_bytes(),self.original)
+        self.assertEqual(self.env,{'foreign_marker':'preserve'})
+        self.assertFalse(bt.FALLBACK_DROPIN.exists())
+        self.assertEqual(bt.fallback_record()['status'],'restored')
+
+    def test_failed_saved_entry_write_rolls_back(self):
+        def fail(argv,**kw):
+            if argv[0]=='grub-editenv' and argv[2]=='set':
+                raise bt.Refusal('write failed')
+            return self.command(argv,**kw)
+        with patch.object(bt,'run',side_effect=fail):
+            with self.assertRaises(bt.Refusal): bt.ensure_fallback()
+        self.assertEqual(bt.CFG.read_bytes(),self.original)
+        self.assertFalse(bt.FALLBACK_DROPIN.exists())
+        self.assertNotIn('saved_entry',self.env)
+
+    def test_interrupted_commit_recovers_before_retry(self):
+        bt.ensure_fallback()
+        d=bt.fallback_record();d['status']='committing';bt.save_fallback(d)
+        bt.ensure_fallback()
+        self.assertEqual(bt.fallback_record()['status'],'ready')
+        self.assertEqual(bt.fallback_record()['original_environment'],{'foreign_marker':'preserve'})
+
+    def test_concurrent_menu_edit_is_preserved(self):
+        def changed():
+            bt.CFG.write_bytes(b'foreign menu')
+            return CONFIG.encode()
+        with patch.object(bt,'generate_grub',side_effect=changed):
+            with self.assertRaises(bt.Refusal): bt.ensure_fallback()
+        self.assertEqual(bt.CFG.read_bytes(),b'foreign menu')
+
+    def test_generated_menu_must_honor_saved_default(self):
+        with patch.object(bt,'generate_grub',return_value=self.original):
+            with self.assertRaises(bt.Refusal): bt.ensure_fallback()
+        self.assertEqual(bt.CFG.read_bytes(),self.original)
+
+    def test_removal_restores_original_config_and_preserves_foreign_metadata(self):
+        bt.ensure_fallback()
+        self.env['added_later']='retain'
+        bt.restore_fallback()
+        self.assertEqual(bt.CFG.read_bytes(),self.original)
+        self.assertEqual(self.env,{'foreign_marker':'preserve','added_later':'retain'})
+        self.assertFalse(bt.FALLBACK_DROPIN.exists())
+        self.assertEqual(bt.fallback_record()['status'],'restored')
+        self.commands.clear()
+        bt.restore_fallback()
+        self.assertEqual(self.commands,[])
+
+    def test_removal_refuses_foreign_default_changes(self):
+        bt.ensure_fallback()
+        bt.DEFAULTS.write_text('GRUB_DEFAULT=foreign\n')
+        with self.assertRaises(bt.Refusal): bt.restore_fallback()
+        self.assertTrue(bt.FALLBACK_DROPIN.exists())
+
+    def test_removal_refuses_foreign_saved_entry(self):
+        bt.ensure_fallback()
+        self.env['saved_entry']=ENTRY_NEW
+        with self.assertRaises(bt.Refusal): bt.restore_fallback()
+        self.assertEqual(self.env['saved_entry'],ENTRY_NEW)
+
+    def test_removal_requires_original_kernel(self):
+        bt.ensure_fallback()
+        with patch.object(bt,'kernel',return_value=NEW):
+            with self.assertRaises(bt.Refusal): bt.restore_fallback()
+        self.assertTrue(bt.FALLBACK_DROPIN.exists())
+
+    def test_modified_owned_dropin_refuses_repeat_and_remove(self):
+        bt.ensure_fallback();bt.FALLBACK_DROPIN.write_text('foreign edit')
+        with self.assertRaises(bt.Refusal): bt.ensure_fallback()
+        with self.assertRaises(bt.Refusal): bt.restore_fallback()
+        self.assertEqual(bt.FALLBACK_DROPIN.read_text(),'foreign edit')
 
 
 UUID = '11111111-2222-4333-8444-555555555555'
