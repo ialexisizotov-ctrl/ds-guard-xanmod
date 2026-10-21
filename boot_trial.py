@@ -14,6 +14,7 @@ from pathlib import Path
 import re
 import shlex
 import subprocess
+import sys
 import time
 from contextlib import contextmanager
 
@@ -470,10 +471,103 @@ def boot_plan(target):
             'grub_environment': env, 'grub_environment_backend': backend}
 
 
+PROC = Path('/proc')
+SSH_EXECUTABLES = {'/usr/sbin/sshd', '/usr/lib/openssh/sshd-session'}
+
+
+def connection_fields(value):
+    fields = value.split()
+    try:
+        if len(fields) != 4 or any(not fields[i].isdigit() or not 1 <= int(fields[i]) <= 65535 for i in (1, 3)):
+            raise ValueError()
+        addresses = [ipaddress.ip_address(fields[i]) for i in (0, 2)]
+        if addresses[0].version != addresses[1].version or any(a.is_unspecified or a.is_multicast for a in addresses):
+            raise ValueError()
+    except ValueError as error:
+        raise Refusal('Некорректные параметры текущего SSH-сеанса; пробная загрузка не назначена.') from error
+    return [str(addresses[0]), str(int(fields[1])), str(addresses[1]), str(int(fields[3]))]
+
+
+def process_identity(pid):
+    # ppid/starttime guard against PID reuse while traversing this process tree.
+    fields = (PROC/str(pid)/'stat').read_text().rpartition(') ')[2].split()
+    return int(fields[1]), int(fields[19])
+
+
+def trusted_sshd(pid):
+    p = PROC/str(pid)
+    executable = (p/'exe').resolve(strict=True)
+    s = executable.stat()
+    return (str(executable) in SSH_EXECUTABLES and p.stat().st_uid == 0 and
+            s.st_uid == 0 and not s.st_mode & 0o022 and
+            os.readlink(p/'ns/net') == os.readlink(PROC/'self/ns/net'))
+
+
+def socket_connections(pid):
+    """Read only established TCP inodes actually held by this SSH ancestor."""
+    p = PROC/str(pid)
+    inodes = set()
+    for fd in (p/'fd').iterdir():
+        try:
+            match = re.fullmatch(r'socket:\[(\d+)\]', os.readlink(fd))
+            if match:
+                inodes.add(match[1])
+        except FileNotFoundError:
+            continue
+    def endpoint(value):
+        address, port = value.split(':')
+        if len(address) not in (8, 32):
+            raise ValueError('Invalid TCP address')
+        data = b''.join(int(address[i:i+8], 16).to_bytes(4, sys.byteorder)
+                        for i in range(0, len(address), 8))
+        return str(ipaddress.ip_address(data)), str(int(port, 16))
+    found = set()
+    for table in ('tcp', 'tcp6'):
+        path = p/'net'/table
+        if not path.exists():
+            continue
+        for line in path.read_text().splitlines()[1:]:
+            fields = line.split()
+            if len(fields) < 10 or fields[3] != '01' or fields[9] not in inodes:
+                continue
+            server, sport = endpoint(fields[1]); client, cport = endpoint(fields[2])
+            found.add(tuple(connection_fields(' '.join((client, cport, server, sport)))))
+    return found
+
+
+def inherited_ssh_connection():
+    # sudo/su may clear the environment. Never choose an arbitrary server SSH
+    # connection, use another user's login, or infer it from w/utmp/history.
+    pid = os.getpid(); chain = []; seen = set()
+    try:
+        for _ in range(64):
+            if pid <= 1 or pid in seen:
+                break
+            seen.add(pid); ident = process_identity(pid); chain.append((pid, ident))
+            if trusted_sshd(pid):
+                found = socket_connections(pid)
+                if len(found) > 1:
+                    raise Refusal('Неоднозначный SSH-сеанс предка; пробная загрузка не назначена.')
+                if found:
+                    if any(process_identity(n) != old for n, old in chain):
+                        raise Refusal('SSH-сеанс изменился во время проверки.')
+                    if not trusted_sshd(pid) or socket_connections(pid) != found:
+                        raise Refusal('SSH-соединение изменилось во время проверки.')
+                    return list(next(iter(found)))
+            pid = ident[0]
+    except (OSError, ValueError, IndexError) as error:
+        raise Refusal('Не удалось подтвердить текущий SSH-сеанс после sudo/su. Подключитесь заново по SSH.') from error
+    raise Refusal('Текущий SSH-сеанс не подтверждён. Запустите мастер из SSH-терминала; '
+                  'для sudo используйте curl -fsSL https://raw.githubusercontent.com/'
+                  'ialexisizotov-ctrl/ds-guard-xanmod/main/interactive.sh | sudo bash. '
+                  'Пробная загрузка не назначена.')
+
+
 def capture_baseline():
-    fields = os.environ.get('SSH_CONNECTION', '').split()
-    if len(fields) != 4 or not fields[3].isdigit() or not 1 <= int(fields[3]) <= 65535:
-        raise Refusal('Для защиты пробной загрузки нужен текущий сеанс SSH с SSH_CONNECTION.')
+    value = os.environ.get('SSH_CONNECTION', '').strip()
+    fields = connection_fields(value) if value else inherited_ssh_connection()
+    if not value:
+        print('[SSH ПРОВЕРЕН] Текущее соединение найдено через процесс SSH после sudo/su.', flush=True)
     client, server, port = fields[0], fields[2], int(fields[3])
     for address in (client, server):
         ipaddress.ip_address(address)

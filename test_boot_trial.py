@@ -1,12 +1,118 @@
 import copy
 import json
 import tempfile
+import os
+import sys
 import unittest
 from contextlib import nullcontext, ExitStack
 from pathlib import Path
 from unittest.mock import patch
 
 import boot_trial as bt
+
+
+class SshContextTests(unittest.TestCase):
+    def setUp(self):
+        self.stack = ExitStack(); self.addCleanup(self.stack.close)
+        self.root = Path(self.stack.enter_context(tempfile.TemporaryDirectory()))
+        self.stack.enter_context(patch.object(bt, 'PROC', self.root))
+        self.stack.enter_context(patch.object(bt.os, 'getpid', return_value=30))
+        self.identities = {30:(20,300),20:(10,200),10:(1,100)}
+        self.stack.enter_context(patch.object(bt, 'process_identity', side_effect=lambda n:self.identities[n]))
+        self.trust = self.stack.enter_context(patch.object(bt, 'trusted_sshd', side_effect=lambda n:n==10))
+        self.expected=('198.51.100.1','44321','192.0.2.2','2222')
+        self.sockets = self.stack.enter_context(patch.object(bt, 'socket_connections', return_value={self.expected}))
+
+    def test_sudo_su_chain_uses_only_own_sshd_parent(self):
+        self.assertEqual(bt.inherited_ssh_connection(),list(self.expected))
+        self.assertEqual([x.args[0] for x in self.sockets.call_args_list],[10,10])
+
+    def test_other_logged_in_users_cannot_supply_context(self):
+        self.trust.side_effect=lambda n:False
+        with self.assertRaises(bt.Refusal):bt.inherited_ssh_connection()
+        self.sockets.assert_not_called()
+
+    def test_no_established_parent_socket_refused(self):
+        self.sockets.return_value=set()
+        with self.assertRaises(bt.Refusal):bt.inherited_ssh_connection()
+
+    def test_ambiguous_socket_refused(self):
+        self.sockets.return_value={self.expected,('203.0.113.1','5555','192.0.2.2','2222')}
+        with self.assertRaises(bt.Refusal):bt.inherited_ssh_connection()
+
+    def test_socket_disappears_before_acceptance(self):
+        self.sockets.side_effect=[{self.expected},set()]
+        with self.assertRaises(bt.Refusal):bt.inherited_ssh_connection()
+
+    def test_pid_reuse_refused(self):
+        with patch.object(bt,'process_identity',side_effect=[(20,300),(10,200),(1,100),(20,301)]):
+            with self.assertRaises(bt.Refusal):bt.inherited_ssh_connection()
+
+    def test_ancestry_loop_refused(self):
+        self.identities[20]=(30,200)
+        with self.assertRaises(bt.Refusal):bt.inherited_ssh_connection()
+
+    def test_permission_error_fails_closed(self):
+        self.sockets.side_effect=PermissionError()
+        with self.assertRaises(bt.Refusal):bt.inherited_ssh_connection()
+
+    def test_invalid_environment_never_falls_back(self):
+        with patch.dict(bt.os.environ,{'SSH_CONNECTION':'bad'},clear=True), patch.object(bt,'inherited_ssh_connection') as infer:
+            with self.assertRaises(bt.Refusal):bt.capture_baseline()
+            infer.assert_not_called()
+
+    def test_valid_ipv6_and_nonstandard_port(self):
+        self.assertEqual(bt.connection_fields('2001:db8::1 4321 2001:db8::2 2222'),['2001:db8::1','4321','2001:db8::2','2222'])
+
+    def test_invalid_addresses_and_both_ports_refused(self):
+        for value in ('bad 123 192.0.2.2 22','192.0.2.1 0 192.0.2.2 22','192.0.2.1 123 192.0.2.2 65536','192.0.2.1 123 ::1 22','0.0.0.0 123 192.0.2.2 22','192.0.2.1 123 224.0.0.1 22'):
+            with self.subTest(value=value), self.assertRaises(bt.Refusal):bt.connection_fields(value)
+
+    def test_missing_env_then_normal_health_check(self):
+        responses={'systemctl':'active','ip':None}
+        def command(a,**kw):
+            if a[0]=='systemctl':return 'active'
+            if 'address' in a:return json.dumps([{'ifname':'eth0','addr_info':[{'local':'192.0.2.2'}]}])
+            return json.dumps([{'dev':'eth0','gateway':'192.0.2.254'}])
+        with patch.dict(bt.os.environ,{},clear=True), patch.object(bt,'run',side_effect=command), patch.object(bt,'health_failures',return_value=[]) as health:
+            d=bt.capture_baseline()
+            self.assertEqual(d['ssh_port'],2222);self.assertEqual(d['server_address'],'192.0.2.2');health.assert_called_once()
+
+
+class SshProcParsingTests(unittest.TestCase):
+    def setUp(self):
+        self.stack=ExitStack();self.addCleanup(self.stack.close)
+        self.root=Path(self.stack.enter_context(tempfile.TemporaryDirectory()))
+        self.stack.enter_context(patch.object(bt,'PROC',self.root))
+        self.p=self.root/'10';(self.p/'fd').mkdir(parents=True);(self.p/'net').mkdir()
+        (self.p/'fd/4').symlink_to('socket:[123]')
+
+    def table(self,name,local,remote,state='01',inode='123'):
+        (self.p/'net'/name).write_text('header\n 0: '+local+' '+remote+' '+state+' 0:0 0:0 0 0 0 '+inode+'\n')
+
+    def test_ipv4_endianness_and_socket_owner(self):
+        if sys.byteorder!='little':self.skipTest('little-endian fixture')
+        self.table('tcp','020200C0:08AE','016433C6:AD21')
+        self.assertEqual(bt.socket_connections(10),{('198.51.100.1','44321','192.0.2.2','2222')})
+        self.table('tcp','020200C0:08AE','016433C6:AD21',inode='456')
+        self.assertEqual(bt.socket_connections(10),set())
+
+    def test_ipv6_word_endianness(self):
+        if sys.byteorder!='little':self.skipTest('little-endian fixture')
+        self.table('tcp6','B80D0120000000000000000002000000:0016','B80D0120000000000000000001000000:AD21')
+        self.assertEqual(bt.socket_connections(10),{('2001:db8::1','44321','2001:db8::2','22')})
+
+    def test_listener_is_not_session(self):
+        self.table('tcp','00000000:0016','00000000:0000',state='0A')
+        self.assertEqual(bt.socket_connections(10),set())
+
+    def test_malformed_matching_row_refused(self):
+        self.table('tcp','bad:0016','0100007F:1234')
+        with self.assertRaises(ValueError):bt.socket_connections(10)
+
+    def test_non_sshd_binary_not_trusted(self):
+        (self.p/'exe').symlink_to(sys.executable)
+        self.assertFalse(bt.trusted_sshd(10))
 
 
 class InitialFallbackTests(unittest.TestCase):

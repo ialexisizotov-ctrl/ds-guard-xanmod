@@ -21,7 +21,7 @@ import time
 sys.dont_write_bytecode = True
 import boot_trial as boot
 
-VERSION = '1.0.0-rc11'
+VERSION = '1.0.0-rc12'
 RELEASE = 'v1.7.11-dsg2-rc9'
 ARCHIVE_SHA = '6d3eb76b7bb545ab31ff19f9148be77095cc6ef4a7888067e2b9b6601f2b841d'
 ARCHIVE_BYTES = 71116763
@@ -732,6 +732,8 @@ def prepare_install_fallback(directory, args):
         boot.environment_backend()
     except boot.UnsupportedStorage as error:
         return offer_current_kernel(directory, args, error)
+    # Fail before journal/GRUB/package writes if there is no usable SSH context.
+    boot.capture_baseline()
     print("[ПОДГОТОВКА ВОЗВРАТА] Проверка и закрепление работающего ядра до установки нового.", flush=True)
     fallback = boot.ensure_fallback()
     print("[ВОЗВРАТ ПОДГОТОВЛЕН] Резервное ядро: " + fallback["fallback"] +
