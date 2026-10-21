@@ -14,6 +14,18 @@ import ubuntu_apt as apt
 
 
 class UbuntuApt(unittest.TestCase):
+    def test_optional_dependencies_disabled_in_plan_and_execution_scope(self):
+        with self.scenario() as (root, receipts, update, install):
+            options = apt.apt_options(root)
+            opts = dict(options[i+1].split('=', 1) for i, x in enumerate(options) if x == '-o')
+            self.assertEqual(opts['APT::Install-Recommends'], 'false')
+            self.assertEqual(opts['APT::Install-Suggests'], 'false')
+            with patch.object(apt, 'resolve_packages', return_value=(['suricata'], {'fallback_used':False})) as plan:
+                self.assertEqual(apt.install(['suricata'], '/fixture'), 0)
+            self.assertEqual(plan.call_args.args[1], options)
+            argv = install.call_args.args[0]
+            self.assertEqual(argv[1:1+len(options)], options)
+
     def test_only_official_supported_sources_with_explicit_keyring(self):
         for suite in ['jammy', 'noble']:
             text = apt.sources(suite)
