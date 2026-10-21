@@ -622,13 +622,25 @@ def arm(confirmation_already_given=False):
         raise Refusal('Перезагрузка требует явного выбора в мастере.')
     with locked():
         d = read_state()
-        if not d or d['status'] != 'prepared' or boot_id() != d['origin_boot_id'] or kernel() != d['fallback']:
-            raise Refusal('Пробная загрузка не подготовлена в текущей загрузке.')
+        if (not d or d['status'] != 'prepared' or kernel() != d['fallback']
+                or d.get('recovery_attempts', 0)):
+            raise Refusal('Нет отложенной пробной загрузки на работающем резервном ядре.')
         verify_owned(d)
         plan = boot_plan(d['target'])
         for key in ('saved_entry', 'target_entry', 'grub_sha256'):
             if d[key] != plan[key]:
                 raise Refusal('Настройки загрузки изменились после подготовки.')
+        if health_failures(d['baseline']):
+            raise Refusal('Сохранённые SSH и сеть не прошли проверку перед перезагрузкой.')
+        baseline = capture_baseline()
+        current_boot = boot_id()
+        # Choosing "later" never arms GRUB. An ordinary intervening reboot on
+        # the fallback is therefore not a failed trial. Rebase only after an
+        # explicit reboot choice and all ownership, image and health checks.
+        if current_boot != d['origin_boot_id']:
+            d['deferred_from_boot_id'] = d['origin_boot_id']
+            d['origin_boot_id'] = current_boot
+        d['baseline'] = baseline
         d['status'] = 'arming'
         save(d)
         run(['grub-reboot', d['target_entry']])

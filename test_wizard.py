@@ -534,6 +534,40 @@ class FlowTests(LocalCase):
         arm.assert_not_called()
         command.assert_not_called()
 
+    def test_deferred_then_manual_reboot_offers_existing_trial(self):
+        trial = self.trial('prepared', running_kernel='old-kernel', current_kernel='old-kernel')
+        self.patch(w.boot, 'inspect', return_value=trial)
+        self.patch(w, 'ask', return_value='2')
+        arm = self.patch(w.boot, 'arm')
+        setup = self.patch(w, 'setup')
+        command = self.patch(w, 'run')
+        self.assertEqual(w.handle_trial(self.root), 20)
+        arm.assert_not_called(); setup.assert_not_called(); command.assert_not_called()
+
+    def test_deferred_then_manual_reboot_can_be_cancelled(self):
+        self.patch(w.boot, 'inspect', return_value=self.trial('prepared', running_kernel='old-kernel'))
+        self.patch(w, 'ask', return_value='0')
+        cancel = self.patch(w.boot, 'cancel')
+        setup = self.patch(w, 'setup')
+        self.assertEqual(w.handle_trial(self.root), 0)
+        cancel.assert_called_once(); setup.assert_not_called()
+
+    def test_prepared_on_foreign_or_unarmed_target_kernel_never_offered(self):
+        offer = self.patch(w, 'offer_reboot')
+        setup = self.patch(w, 'setup')
+        for kernel in ('foreign', 'new-kernel'):
+            with mock.patch.object(w.boot, 'inspect', return_value=self.trial('prepared', running_kernel=kernel)):
+                with self.assertRaises(w.Refusal): w.handle_trial(self.root)
+        offer.assert_not_called(); setup.assert_not_called()
+
+    def test_prepared_reboot_choice_failure_never_starts_install(self):
+        self.patch(w.boot, 'inspect', return_value=self.trial('prepared', running_kernel='old-kernel'))
+        self.patch(w, 'ask', return_value='1')
+        self.patch(w.boot, 'arm', side_effect=w.boot.Refusal('changed GRUB'))
+        setup = self.patch(w, 'setup'); command = self.patch(w, 'run')
+        with self.assertRaises(w.boot.Refusal): w.handle_trial(self.root)
+        setup.assert_not_called(); command.assert_not_called()
+
     def test_cancel_reboot_cleans_owned_trial_only(self):
         self.patch(w, "ask", return_value="0")
         arm = self.patch(w.boot, "arm")

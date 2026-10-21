@@ -21,7 +21,7 @@ import time
 sys.dont_write_bytecode = True
 import boot_trial as boot
 
-VERSION = '1.0.0-rc9'
+VERSION = '1.0.0-rc10'
 RELEASE = 'v1.7.11-dsg2-rc8'
 ARCHIVE_SHA = 'ea218418327f0f15fcc53a2d406bece30da500049566a3ff89c789422f87b5a1'
 ARCHIVE_BYTES = 71115980
@@ -342,14 +342,17 @@ def show_trial(trial):
 def offer_reboot(trial):
     show_trial(trial)
     choice = ask("\n1. Перезагрузить сейчас (доступ к консоли/сбросу хостера есть)\n"
-                 "2. Продолжить позже\n0. Отменить пробную загрузку\nВыберите [2]: ",
+                 "2. Отложить (обычный reboot загрузит прежнее ядро)\n"
+                 "0. Отменить пробную загрузку\nВыберите [2]: ",
                  {"0", "1", "2"}, "2", noninteractive="2")
     if choice == "0":
         boot.cancel()
         print("[ОТМЕНЕНО] Разовая загрузка отменена; пакеты сохранены.")
         return 0
     if choice == "2":
-        print("[СОХРАНЕНО] Запустите эту же команду позже. Сервер не перезагружен.")
+        print("[ОТЛОЖЕНО] Новое ядро не назначено для загрузки. Обычный reboot "
+              "оставит прежнее ядро. Для продолжения запустите эту же команду "
+              "и выберите перезагрузку в мастере.")
         return 20
     boot.arm(confirmation_already_given=True)
     print("[ПЕРЕЗАГРУЗКА] Выбор проверен. SSH сейчас отключится.", flush=True)
@@ -530,6 +533,14 @@ def handle_trial(directory, requested_mode=None):
         raise Refusal("Состояние пробной загрузки неоднозначно. Установка, "
                       "автоматический повтор и закрытие из меню остановлены; "
                       "сначала нужна проверка показанной диагностики.")
+    if phase == "prepared":
+        require(trial.get("running_kernel") == trial.get("fallback"),
+                "Отложенная загрузка ожидает прежнее рабочее ядро; сейчас запущено другое.")
+        if trial.get("current_boot_id") != trial["origin_boot_id"]:
+            print("[ПРОДОЛЖЕНИЕ] После отсрочки сервер перезапущен на прежнем ядре. "
+                  "Пробная загрузка ещё не назначалась. Пакеты уже подготовлены; "
+                  "перед выбранной перезагрузкой повторно проверю GRUB, сеть и SSH.")
+        return offer_reboot(trial)
     if trial.get("current_boot_id") == trial["origin_boot_id"]:
         if phase == "armed":
             return recovery_menu(trial, requested_mode)
