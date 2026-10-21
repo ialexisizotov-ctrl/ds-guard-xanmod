@@ -1,0 +1,19 @@
+{
+  "schema": 1,
+  "release": "v1.7.11-dsg2-rc10",
+  "wizard_version": "1.0.0-rc13",
+  "status": "LOCAL_VALIDATION_PASS",
+  "core_tests": {
+    "tests": 283,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "kernel_assets_changed": false,
+  "kernel_catalog_changed": false,
+  "network_profile_changed": false,
+  "production_readonly_baseline_validation": true,
+  "production_install_performed": false,
+  "all_servers_accepted": false,
+  "change": "Validate exact Ubuntu catalog packages and proven required dependency after trial boot, including preinstalled components."
+}
