@@ -1132,6 +1132,14 @@ class RecoveryMenuTests(LocalCase):
 
 
 class FallbackSelectionTests(LocalCase):
+    def test_missing_ssh_is_refused_before_grub_writes(self):
+        self.patch(w,"run",return_value=types.SimpleNamespace(returncode=0,stdout='{"current":"old","selected":"new"}',stderr=""))
+        self.patch(w.boot,"environment_backend",return_value={})
+        self.patch(w.boot,"capture_baseline",side_effect=w.boot.Refusal("no verified SSH"))
+        prepare=self.patch(w.boot,"ensure_fallback")
+        with self.assertRaises(w.boot.Refusal):REAL_PREPARE_FALLBACK(Path('/bundle'),['--mode','full'])
+        prepare.assert_not_called()
+
     def test_readonly_and_non_kernel_modes_do_not_prepare_grub(self):
         prepare = self.patch(w.boot, "ensure_fallback")
         for mode in ("check","status","tune","guard","remove","disable","rollback-upgrade"):
@@ -1150,6 +1158,7 @@ class FallbackSelectionTests(LocalCase):
         prepare.assert_not_called()
 
     def test_new_kernel_prepares_fallback(self):
+        self.patch(w.boot, "capture_baseline", return_value={})
         command = self.patch(w,"run",return_value=types.SimpleNamespace(returncode=0,stdout='{"current":"old","selected":"new"}',stderr=""))
         self.patch(w.boot, "environment_backend", return_value={"filesystem": "ext2", "abstraction": ""})
         prepare = self.patch(w.boot,"ensure_fallback",return_value={"fallback":"old"})
@@ -1242,6 +1251,7 @@ class CurrentKernelFallbackTests(LocalCase):
         prepare.assert_not_called()
 
     def test_failure_after_boot_writes_never_offers_fallback(self):
+        self.patch(w.boot, "capture_baseline", return_value={})
         self.select_new()
         self.patch(w.boot, "environment_backend", return_value={})
         self.patch(w.boot, "ensure_fallback", side_effect=w.boot.Refusal("partial write"))
