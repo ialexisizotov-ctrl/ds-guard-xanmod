@@ -354,6 +354,7 @@ class StateTests(unittest.TestCase):
             patch.object(bt, 'verify_owned'),
             patch.object(bt, 'cleanup'),
             patch.object(bt, 'health_failures', return_value=[]),
+            patch.object(bt, 'capture_baseline', return_value={'fresh_session': True}),
             patch.object(bt, 'run', side_effect=self.fake_run),
         ]
         self.mocks = [p.start() for p in self.patches]
@@ -651,6 +652,62 @@ class StateTests(unittest.TestCase):
         self.d['status'] = 'prepared'
         with self.assertRaises(bt.Refusal):
             bt.arm(confirmation_already_given=True)
+        self.assertEqual(self.calls, [])
+
+    def test_deferred_reboot_rebases_only_when_explicitly_armed(self):
+        self.d['status'] = 'prepared'
+        self.running = OLD
+        with patch.object(bt, 'boot_plan', return_value=copy.deepcopy(self.d)):
+            bt.arm(confirmation_already_given=True)
+        self.assertEqual(self.d['status'], 'armed')
+        self.assertEqual(self.d['origin_boot_id'], 'new')
+        self.assertEqual(self.d['deferred_from_boot_id'], 'origin')
+        self.assertEqual(self.d['baseline'], {'fresh_session': True})
+        self.assertEqual(self.env, {'saved_entry': ENTRY_OLD, 'next_entry': ENTRY_NEW})
+        self.assertLess(self.calls.index(('save', 'arming', 0)),
+                        self.calls.index(('run', ['grub-reboot', ENTRY_NEW])))
+
+    def test_prepared_on_fallback_is_not_failed_trial_or_auto_rebooted(self):
+        self.d['status'] = 'prepared'
+        self.running = OLD
+        original = copy.deepcopy(self.d)
+        self.assertEqual(bt.post_boot_guard(), 0)
+        self.assertFalse(bt.resume_ready())
+        self.assertEqual(self.d, original)
+        self.assertEqual(self.calls, [])
+
+    def test_deferred_bad_saved_network_cannot_arm(self):
+        self.d['status'] = 'prepared'; self.running = OLD
+        with patch.object(bt, 'boot_plan', return_value=copy.deepcopy(self.d)), \
+             patch.object(bt, 'health_failures', return_value=['route missing']):
+            with self.assertRaises(bt.Refusal): bt.arm(confirmation_already_given=True)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.d['origin_boot_id'], 'origin')
+
+    def test_deferred_new_ssh_baseline_failure_cannot_arm(self):
+        self.d['status'] = 'prepared'; self.running = OLD
+        with patch.object(bt, 'boot_plan', return_value=copy.deepcopy(self.d)), \
+             patch.object(bt, 'capture_baseline', side_effect=bt.Refusal('no SSH')):
+            with self.assertRaises(bt.Refusal): bt.arm(confirmation_already_given=True)
+        self.assertEqual(self.calls, [])
+
+    def test_deferred_changed_owned_file_cannot_arm(self):
+        self.d['status'] = 'prepared'; self.running = OLD
+        with patch.object(bt, 'verify_owned', side_effect=bt.Refusal('changed')):
+            with self.assertRaises(bt.Refusal): bt.arm(confirmation_already_given=True)
+        self.assertEqual(self.calls, [])
+
+    def test_deferred_recovery_attempt_is_never_rearmed(self):
+        self.d['status'] = 'prepared'; self.running = OLD
+        self.d['recovery_attempts'] = 1
+        with self.assertRaises(bt.Refusal): bt.arm(confirmation_already_given=True)
+        self.assertEqual(self.calls, [])
+
+    def test_failed_or_armed_trial_is_not_treated_as_deferred(self):
+        self.running = OLD
+        for phase in ('armed', 'arming', 'fallback-observed', 'reboot-failed', 'recovery-requested'):
+            self.d['status'] = phase
+            with self.assertRaises(bt.Refusal): bt.arm(confirmation_already_given=True)
         self.assertEqual(self.calls, [])
 
     def test_arm_config_drift_refuses(self):
