@@ -154,6 +154,9 @@ def apt_options(root):
         'APT::Get::allow-change-held-packages': 'false',
         'APT::Get::allow-remove-essential': 'false',
         'APT::Ignore-Hold': 'false',
+        # Install the requested components and their required dependencies.
+        # Optional rule updaters can otherwise upgrade the host Perl cohort.
+        'APT::Install-Recommends': 'false', 'APT::Install-Suggests': 'false',
         'Acquire::Check-Valid-Until': 'true', 'Acquire::Check-Date': 'true',
         'Acquire::ForceIPv4': 'true', 'Acquire::Retries': '3',
         'Acquire::http::Timeout': '25', 'Acquire::https::Timeout': '25',

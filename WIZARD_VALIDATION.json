@@ -1,17 +1,21 @@
 {
   "schema": 1,
-  "wizard_version": "1.0.0-rc10",
-  "release": "v1.7.11-dsg2-rc8",
+  "release": "v1.7.11-dsg2-rc9",
+  "wizard_version": "1.0.0-rc11",
   "status": "LOCAL_VALIDATION_PASS",
-  "wizard_tests": {
-    "tests": 203,
+  "core_tests": {
+    "tests": 275,
     "failures": 0,
     "errors": 0,
     "skipped": 0
   },
-  "core_payload_changed": false,
-  "payload_archive_sha256": "ea218418327f0f15fcc53a2d406bece30da500049566a3ff89c789422f87b5a1",
-  "source_tests_are_mocked": true,
+  "kernel_assets_changed": false,
+  "kernel_catalog_changed": false,
+  "network_profile_changed": false,
   "production_verified_at_freeze": false,
-  "all_servers_accepted": false
+  "all_servers_accepted": false,
+  "change": "Install required dependencies only, preserving installed versions; retain deferred boot recovery.",
+  "wizard_test_count": 203,
+  "payload_archive_sha256": "6d3eb76b7bb545ab31ff19f9148be77095cc6ef4a7888067e2b9b6601f2b841d",
+  "payload_manifest_sha256": "f0b2f40007a0beebcc9bfb93ff0e3d59c8dba8ca5f6fc14030596fd0f32aae51"
 }

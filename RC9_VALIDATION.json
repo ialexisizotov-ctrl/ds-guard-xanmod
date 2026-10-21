@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "release": "v1.7.11-dsg2-rc9",
+  "wizard_version": "1.0.0-rc11",
+  "status": "LOCAL_VALIDATION_PASS",
+  "core_tests": {
+    "tests": 275,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "kernel_assets_changed": false,
+  "kernel_catalog_changed": false,
+  "network_profile_changed": false,
+  "production_verified_at_freeze": false,
+  "all_servers_accepted": false,
+  "change": "Install required dependencies only, preserving installed versions; retain deferred boot recovery."
+}
