@@ -68,6 +68,11 @@ class BootBaselineTests(unittest.TestCase):
             state = Path(td)/'lifecycle'
             state.mkdir()
             (state.parent/'kernel').mkdir()
+            (state/'package-receipts').mkdir()
+            (state/'package-receipts/one.json').write_text(json.dumps({
+                'schema': 1, 'completed': True, 'returncode': 0,
+                'operation_id': '00000000-0000-0000-0000-000000000001',
+                'installed': a['owned_packages']}))
             for name, d in [('before.json', b), ('after.json', a), ('last-operation.json', {'exit_code': 20})]:
                 (state/name).write_text(json.dumps(d))
             original = (state/'before.json').read_bytes()
@@ -76,7 +81,8 @@ class BootBaselineTests(unittest.TestCase):
             (state.parent/'kernel/new.staged.json').write_text(json.dumps(stage))
             boot = state.parent/'boot'
             boot.write_text('boot-new')
-            with patch.object(m, 'TRIAL', trial_path), patch.object(m, 'BOOT_ID', boot):
+            scope = {p: {'version': '1', 'architecture': 'amd64'} for p in a['owned_packages']}
+            with patch.object(m, 'TRIAL', trial_path), patch.object(m, 'BOOT_ID', boot), patch.object(m, 'kernel_package_scope', return_value=scope):
                 self.assertTrue(m.capture(state,b,a,c,lambda *x: None,lifecycle.save))
                 self.assertFalse(m.capture(state,b,a,c,lambda *x: None,lifecycle.save))
             bb, aa = m.effective(state,b,a,'new')
@@ -100,6 +106,85 @@ class BootBaselineTests(unittest.TestCase):
             with self.assertRaises(RuntimeError): m.effective(state,b,aa,'unknown')
             (state/'before.json').write_text(json.dumps({**b, 'time':1}))
             with self.assertRaises(RuntimeError): m.effective(state,b,aa,'new')
+
+    def ubuntu_fixture(self, target='6.8.0-147-generic'):
+        b, a, c, t, s = self.fixture()
+        catalog = json.loads(Path(m.__file__).with_name('kernels.json').read_text())
+        scope = m.catalog_packages(target, catalog)
+        a['owned_packages'] = {p: v['version'] for p, v in scope.items()}
+        c['packages'] = dict(a['owned_packages'])
+        c['kernel'] = t['target'] = s['candidate'] = target
+        return b, a, c, t, s, scope
+
+    def test_full_ubuntu_catalogs_and_xanmod_pass(self):
+        catalog = json.loads(Path(m.__file__).with_name('kernels.json').read_text())
+        for target in catalog:
+            with self.subTest(target=target):
+                b,a,c,t,s,scope = self.ubuntu_fixture(target)
+                m.validate(b,a,c,t,s,'boot-new',scope)
+
+    def test_preinstalled_subset_with_required_regdb_passes(self):
+        b,a,c,t,s,scope = self.ubuntu_fixture()
+        extras = 'linux-modules-extra-'+c['kernel']
+        b['packages'] = {p:v for p,v in c['packages'].items() if p != extras}
+        a['owned_packages'] = {extras:c['packages'][extras], 'wireless-regdb':'2026.05.30-0ubuntu1~24.04.1'}
+        c['packages'].update(a['owned_packages'])
+        scope['wireless-regdb'] = {'version':None,'architecture':'all'}
+        m.validate(b,a,c,t,s,'boot-new',scope)
+        c['packages']['unrelated-admin-tool'] = '9'
+        m.validate(b,a,c,t,s,'boot-new',scope)
+
+    def test_fully_preinstalled_kernel_has_no_owned_packages(self):
+        b,a,c,t,s,scope = self.ubuntu_fixture()
+        b['packages'] = dict(c['packages']);a['owned_packages'] = {}
+        m.validate(b,a,c,t,s,'boot-new',scope)
+
+    def test_unrelated_owned_package_wrong_version_architecture_and_missing_stop(self):
+        for case in ('foreign','other_kernel','wrong_version','wrong_arch','missing','preexisting','duplicate'):
+            with self.subTest(case=case):
+                b,a,c,t,s,scope = self.ubuntu_fixture();p='linux-image-'+c['kernel']
+                if case=='foreign':a['owned_packages']['suricata']='1';c['packages']['suricata']='1'
+                if case=='other_kernel':a['owned_packages']['linux-image-other']='1';c['packages']['linux-image-other']='1'
+                if case=='wrong_version':a['owned_packages'][p]=c['packages'][p]='999'
+                if case=='wrong_arch':a['owned_packages'][p+':arm64']=a['owned_packages'].pop(p)
+                if case=='missing':del c['packages'][p]
+                if case=='preexisting':b['packages'][p]=a['owned_packages'][p]
+                if case=='duplicate':a['owned_packages'][p+':amd64']=a['owned_packages'][p]
+                with self.assertRaises(RuntimeError):m.validate(b,a,c,t,s,'boot-new',scope)
+
+    def test_receipted_dependency_version_change_stops(self):
+        b,a,c,t,s,scope=self.ubuntu_fixture()
+        scope['wireless-regdb']={'version':None,'architecture':'all'}
+        a['owned_packages']['wireless-regdb']='1';c['packages']['wireless-regdb']='2'
+        with self.assertRaises(RuntimeError):m.validate(b,a,c,t,s,'boot-new',scope)
+
+    def test_exact_ubuntu_parent_dependency_required(self):
+        target='6.8.0-147-generic';parent='linux-modules-extra-'+target
+        from subprocess import CompletedProcess
+        for dep, expected in [('wireless-regdb',True),('linux-modules-'+target+', wireless-regdb',True),
+                              ('wireless-regdb-other',False),('wireless-regdb | other',False),('',False)]:
+            with self.subTest(dep=dep), patch.object(m.subprocess,'run',return_value=CompletedProcess([],0,parent+'\tamd64\tinstalled\t6.8.0-147.147\t'+dep+'\n','')):
+                self.assertEqual('wireless-regdb' in m.kernel_package_scope(target),expected)
+        with patch.object(m.subprocess,'run',return_value=CompletedProcess([],0,parent+'\tamd64\tinstalled\t999\twireless-regdb\n','')):
+            with self.assertRaises(RuntimeError):m.kernel_package_scope(target)
+
+    def test_catalog_cannot_be_empty_or_unknown(self):
+        for catalog in ({},{'new':{'packages':[]}}, {'new':{'image':'bad','headers':'bad'}}):
+            with self.assertRaises(RuntimeError):m.catalog_packages('new',catalog)
+
+    def test_private_receipts_required_and_exact(self):
+        owned={'linux-modules-extra-test':'1','wireless-regdb':'2'}
+        good={'schema':1,'completed':True,'returncode':0,'operation_id':'00000000-0000-0000-0000-000000000001','installed':owned}
+        with tempfile.TemporaryDirectory() as td:
+            state=Path(td);receipts=state/'package-receipts';receipts.mkdir();f=receipts/'one.json'
+            with self.assertRaises(RuntimeError):m.verify_kernel_receipts(state,owned)
+            f.write_text(json.dumps(good));m.verify_kernel_receipts(state,owned)
+            for key,value in [('schema',0),('completed',False),('returncode',1),('operation_id','bad'),('installed',{})]:
+                with self.subTest(key=key):
+                    f.write_text(json.dumps({**good,key:value}))
+                    with self.assertRaises(RuntimeError):m.verify_kernel_receipts(state,owned)
+            f.write_text(json.dumps(good));(receipts/'two.json').write_text(json.dumps(good))
+            with self.assertRaises(RuntimeError):m.verify_kernel_receipts(state,owned)
 
 
 if __name__ == '__main__':

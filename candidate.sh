@@ -3,8 +3,8 @@
 set -euo pipefail
 umask 077
 echo '[КАНДИДАТ] Предварительный выпуск; production-приёмка ещё не завершена.'
-release='v1.7.11-dsg2-rc9'
-expected='6d3eb76b7bb545ab31ff19f9148be77095cc6ef4a7888067e2b9b6601f2b841d'
+release='v1.7.11-dsg2-rc10'
+expected='40ad19da000d097fe67acf45aae077ef66e5bd4e38c583618b311bea7e3c9c87'
 [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || { echo '[ОСТАНОВЛЕНО] Принятого релиза пока нет. Предыдущий выпуск отозван; установка не начата.'; exit 78; }
 [ "$(id -u)" = 0 ] || { echo '[ОШИБКА] Запустите установщик с правами root.'; exit 77; }
 work=$(mktemp -d /var/tmp/ds-guard-download.XXXXXXXX)
